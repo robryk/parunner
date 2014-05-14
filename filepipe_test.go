@@ -36,9 +36,6 @@ func TestFileQueueSimple(t *testing.T) {
 		} else if string(buf) != testString {
 			t.Errorf("Read %v, expected %v", string(buf), testString)
 		}
-		if err := fpr.Close(); err != nil {
-			t.Errorf("Failed to close a filepipe reader: %v", err)
-		}
 		finished <- struct{}{}
 	}()
 	_, err = fp.Write([]byte(testString))
@@ -62,16 +59,13 @@ func TestFileQueueConcurrentReaders(t *testing.T) {
 	for i := 0; i < P; i++ {
 		wg.Add(1)
 		fpr := fp.Reader()
-		go func(fpr io.ReadCloser) {
+		go func(fpr io.Reader) {
 			buf, err := ioutil.ReadAll(fpr)
 			if err != nil {
 				t.Fatalf("Failed to read from a filepipe reader: %v", err)
 			}
 			if string(buf) != testString {
 				t.Errorf("Read %v, expected %v", string(buf), testString)
-			}
-			if err := fpr.Close(); err != nil {
-				t.Errorf("Failed to close a filepipe reader: %v", err)
 			}
 			wg.Add(-1)
 		}(fpr)

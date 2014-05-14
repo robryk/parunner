@@ -8,8 +8,7 @@ import (
 )
 
 type FilePipe struct {
-	f       *os.File
-	readers sync.WaitGroup
+	f *os.File
 
 	mu      sync.Mutex
 	cond    sync.Cond
@@ -18,6 +17,7 @@ type FilePipe struct {
 }
 
 func NewFilePipe() (*FilePipe, error) {
+	// TODO: close and remove the file sometime
 	f, err := ioutil.TempFile("", "filepipe")
 	if err != nil {
 		return nil, err
@@ -27,8 +27,7 @@ func NewFilePipe() (*FilePipe, error) {
 	return fp, nil
 }
 
-func (fp *FilePipe) Reader() io.ReadCloser {
-	fp.readers.Add(1)
+func (fp *FilePipe) Reader() io.Reader {
 	return &filePipeReader{fp: fp, pos: 0}
 }
 
@@ -46,10 +45,6 @@ func (fp *FilePipe) Close() error {
 	fp.closing = true
 	fp.cond.Broadcast()
 	fp.mu.Unlock()
-	go func() {
-		fp.readers.Wait()
-		fp.f.Close()
-	}()
 	return nil
 }
 
@@ -78,9 +73,4 @@ func (fpr *filePipeReader) Read(buf []byte) (int, error) {
 			return 0, io.EOF
 		}
 	}
-}
-
-func (fpr *filePipeReader) Close() error {
-	fpr.fp.readers.Add(-1)
-	return nil
 }
