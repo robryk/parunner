@@ -1,0 +1,89 @@
+#include "zeus.h"
+#include <assert.h>
+#include <stdio.h>
+
+#define MAGIC 1736434764
+#define SEND 3
+#define RECV 4
+
+static int initialized;
+static FILE* cmdin;
+static FILE* cmdout;
+static int nof_nodes;
+static int node_id;
+
+static unsigned char ReadByte() {
+	unsigned char c;
+	assert(fread(&c, 1, 1, cmdin) == 1);
+	return c;
+}
+
+static int ReadInt() {
+	int v = 0;
+	int i;
+	for(i=0;i<4;i++)
+		v |= (int)(ReadByte()) << (8 * i);
+	return v;
+}
+
+static void WriteByte(unsigned char c) {
+	assert(fwrite(&c, 1, 1, cmdout) == 1);
+}
+
+static int WriteInt(int v) {
+	int i;
+	for(i=0;i<4;i++)
+		WriteByte((v >> (8 * i)) & 0xff);
+}
+
+static void Init() {
+	if (initialized)
+		return;
+	cmdin = fdopen(3, "r");
+	assert(cmdin != NULL);
+	cmdout = fdopen(4, "w");
+	assert(cmdout != NULL);
+	if (ReadInt() != MAGIC)
+		assert(0);
+	nof_nodes = ReadInt();
+	assert(1 <= nof_nodes);
+	node_id = ReadInt();
+	assert(0 <= node_id && node_id < nof_nodes);
+	initialized = 1;
+}
+
+int ZEUS(NumberOfNodes)() {
+	Init();
+	return nof_nodes;
+}
+
+ZEUS(NodeId) ZEUS(MyNodeId)() {
+	Init();
+	return node_id;
+}
+
+void ZEUS(Send)(ZEUS(NodeId) target, const char* message, int bytes) {
+	int i;
+	WriteByte(SEND);
+	WriteInt(target);
+	WriteInt(bytes);
+	for(i=0;i<bytes;i++)
+		WriteByte(message[i]);
+	fflush(cmdout);
+}
+
+ZEUS(MessageInfo) ZEUS(Receive)(ZEUS(NodeId) source, char* buffer, int buffer_size) {
+	ZEUS(MessageInfo) mi;
+	int i;
+	WriteByte(RECV);
+	WriteInt(source);
+	fflush(cmdout);
+	if (ReadInt() != MAGIC + 1)
+		assert(0);
+	mi.sender_id = ReadInt();
+	mi.length = ReadInt();
+	assert(mi.length <= buffer_size);
+	for(i=0;i<mi.length;i++)
+		buffer[i] = ReadByte();
+	return mi;
+}

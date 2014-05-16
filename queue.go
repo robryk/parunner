@@ -20,15 +20,14 @@ func (mq *MessageQueue) Shutdown() {
 
 func (mq *MessageQueue) loop() {
 	buffer := make([]interface{}, 0, 10)
-	bufferStart := 0
 	for {
 		var selecter chan *MessageQueue
 		var outputChan chan interface{}
 		var outputValue interface{}
-		if len(buffer[bufferStart:]) > 0 {
+		if len(buffer) > 0 {
 			selecter = mq.selecter
 			outputChan = mq.outputCh
-			outputValue = buffer[bufferStart]
+			outputValue = buffer[0]
 		}
 		select {
 		case value, ok := <-mq.inputCh:
@@ -37,12 +36,8 @@ func (mq *MessageQueue) loop() {
 			}
 			buffer = append(buffer, value)
 		case outputChan <- outputValue:
-			bufferStart++
+			buffer = buffer[1:]
 		case selecter <- mq:
-		}
-		if bufferStart > len(buffer)/2 {
-			buffer = append([]interface{}(nil), buffer[bufferStart:]...)
-			bufferStart = 0
 		}
 	}
 }

@@ -30,7 +30,7 @@ func TestQueueSelect(t *testing.T) {
 	select {
 	case _ = <-selecter:
 		t.Error("Selecter strobing spuriously")
-	case _ = <- time.After(50 * time.Millisecond):
+	case _ = <-time.After(50 * time.Millisecond):
 	}
 	go putRange(mq, N)
 	for i := 0; i < N; i++ {
@@ -41,4 +41,3 @@ func TestQueueSelect(t *testing.T) {
 	}
 	mq.Shutdown()
 }
-
