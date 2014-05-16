@@ -3,6 +3,7 @@ package main
 type MessageQueue struct {
 	outputCh chan interface{}
 	inputCh  chan interface{}
+	dumpCh   chan []interface{}
 	selector chan *MessageQueue
 }
 
@@ -14,8 +15,9 @@ func (mq *MessageQueue) Get() interface{} {
 	return <-mq.outputCh
 }
 
-func (mq *MessageQueue) Shutdown() {
+func (mq *MessageQueue) Shutdown() []interface{} {
 	close(mq.inputCh)
+	return <-mq.dumpCh
 }
 
 func (mq *MessageQueue) loop() {
@@ -32,6 +34,7 @@ func (mq *MessageQueue) loop() {
 		select {
 		case value, ok := <-mq.inputCh:
 			if !ok {
+				mq.dumpCh <- buffer
 				return
 			}
 			buffer = append(buffer, value)
@@ -46,6 +49,7 @@ func NewMessageQueue(selector chan *MessageQueue) *MessageQueue {
 	mq := &MessageQueue{
 		outputCh: make(chan interface{}),
 		inputCh:  make(chan interface{}, 1),
+		dumpCh:   make(chan []interface{}, 1),
 		selector: selector,
 	}
 	go mq.loop()
