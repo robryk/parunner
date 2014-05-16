@@ -35,6 +35,7 @@ func outputFile(streamType string, i int) *os.File {
 
 type Instances []*Instance
 
+// An error with an attached instance ID, where it has occurred.
 type InstanceError struct {
 	Id  int
 	Err error
@@ -44,9 +45,12 @@ func (ie InstanceError) Error() string {
 	return fmt.Sprintf("Błąd instancji %d: %v", ie.Id, ie.Err)
 }
 
+// Run runs all the instances and wait for them all to terminate. If an instance fails,
+// run kills the rest of the instances. Returns an InstanceError that wraps the first
+// error encountered.
 func (is Instances) Run() error {
 	var wg sync.WaitGroup
-	results := make(chan InstanceError, 1)
+	results := make(chan error, 1)
 	for i, instance := range is {
 		wg.Add(1)
 		go func(i int, instance *Instance) {
@@ -63,21 +67,18 @@ func (is Instances) Run() error {
 	go func() {
 		wg.Wait()
 		select {
-		case results <- InstanceError{}:
+		case results <- nil:
 		default:
 		}
 	}()
 	firstError := <-results
-	if firstError.Err != nil {
+	if firstError != nil {
 		for _, instance := range is {
 			instance.Kill()
 		}
 	}
 	wg.Wait()
-	if firstError.Err != nil {
-		return firstError
-	}
-	return nil
+	return firstError
 }
 
 func main() {
