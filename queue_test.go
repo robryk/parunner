@@ -20,7 +20,10 @@ func TestQueueSimple(t *testing.T) {
 			t.Errorf("When reading from a queue got=%v want=%v", got, i)
 		}
 	}
-	mq.Shutdown()
+	buf := mq.Shutdown()
+	if len(buf) > 0 {
+		t.Errorf("Expected no remaining messages, got %d: %v", len(buf), buf)
+	}
 }
 
 func TestQueueSelect(t *testing.T) {
@@ -39,5 +42,24 @@ func TestQueueSelect(t *testing.T) {
 			t.Errorf("When reading from a queue got=%v want=%v", got, i)
 		}
 	}
-	mq.Shutdown()
+	buf := mq.Shutdown()
+	if len(buf) > 0 {
+		t.Errorf("Expected no remaining messages, got %d: %v", len(buf), buf)
+	}
+}
+
+func TestQueueShutdown(t *testing.T) {
+	// TODO: figure out what should happen to a get after shutdown
+	mq := NewMessageQueue(nil)
+	const N = 1000
+	putRange(mq, N)
+	buf := mq.Shutdown()
+	if len(buf) != N {
+		t.Fatalf("Found %d messages in queue, wanted %d.", len(buf), N)
+	}
+	for i, v := range buf {
+		if i != v {
+			t.Errorf("Expected %d, got %d in queue", i, v)
+		}
+	}
 }
