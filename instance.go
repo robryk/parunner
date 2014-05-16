@@ -8,20 +8,19 @@ import (
 )
 
 type Instance struct {
-	id               int
-	instances        []*Instance
-	cmd              *exec.Cmd
+	id        int
+	instances []*Instance
+	cmd       *exec.Cmd
+
 	messagesSent     int
 	messageBytesSent int
+
+	queues   []*MessageQueue
+	selector chan *MessageQueue
 }
 
 // TODO: errors, communicate later, queues
 func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error) {
-	i := &Instance{
-		id:        id,
-		instances: instances,
-		cmd:       cmd,
-	}
 	if cmd.Stdin != nil {
 		stdin := cmd.Stdin
 		cmd.Stdin = nil
@@ -41,9 +40,21 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 	if err != nil {
 		return nil, err
 	}
-	i.cmd.ExtraFiles = []*os.File{respr, cmdw}
-	go i.communicate(cmdr, respw) // XXX after init
-	return i, nil
+	cmd.ExtraFiles = []*os.File{respr, cmdw} // XXX close these after Start()
+	instance := &Instance{
+		id:        id,
+		instances: instances,
+		cmd:       cmd,
+		queues:    make([]*MessageQueue, len(instances)),
+		selector:  make(chan *MessageQueue),
+	}
+	for i := range instance.queues {
+		// XXX teardown
+		instance.queues[i] = NewMessageQueue(instance.selector)
+	}
+
+	go instance.communicate(cmdr, respw) // XXX after init
+	return instance, nil
 }
 
 func (i *Instance) Start() error {

@@ -43,7 +43,16 @@ type sendHeader struct {
 const MessageCountLimit = 1000
 const MessageSizeLimit = 8 * 1024 * 1024
 
-func (i *Instance) sendMessage(target int, message []byte) error {
+type Message struct {
+	Source  int
+	Message []byte
+}
+
+func (i *Instance) putMessage(message Message) {
+	i.queues[message.Source].Put(message)
+}
+
+func (i *Instance) sendMessage(targetId int, message []byte) error {
 	i.messagesSent++
 	if i.messagesSent > MessageCountLimit {
 		return fmt.Errorf("Przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
@@ -52,7 +61,21 @@ func (i *Instance) sendMessage(target int, message []byte) error {
 	if i.messageBytesSent > MessageSizeLimit {
 		return fmt.Errorf("Przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
 	}
+	i.instances[targetId].putMessage(Message{Source: i.id, Message: message})
 	return nil
+}
+
+func (i *Instance) receiveMessage(sourceId int) Message {
+	// XXX unblocking when exiting
+	message := i.queues[sourceId].Get().(Message)
+	return message
+}
+
+func (i *Instance) receiveAnyMessage() Message {
+	// XXX unblocking when exiting
+	mq := <-i.selector
+	message := mq.Get().(Message)
+	return message
 }
 
 func (i *Instance) communicate(r io.ReadCloser, w io.WriteCloser) error {
@@ -102,26 +125,30 @@ func (i *Instance) communicate(r io.ReadCloser, w io.WriteCloser) error {
 			if rh.SourceId < -1 || rh.SourceId >= 100 {
 				return fmt.Errorf("Invalid source instance in a receive request: %d", rh.SourceId)
 			}
+			var message Message
 			if rh.SourceId == -1 {
 				if *traceCommunications {
 					log.Printf("Instancja %d czeka na wiadomość od dowolnej innej instancji.", i.id)
 				}
+				message = i.receiveAnyMessage()
 			} else {
 				if *traceCommunications {
 					log.Printf("Instancja %d czeka na wiadomość od instancji %d.", i.id, rh.SourceId)
 				}
+				message = i.receiveMessage(int(rh.SourceId))
 			}
-			// receive message
+			if *traceCommunications {
+				log.Printf("Instancja %d odebrała wiadomość od instancji %d.", i.id, message.Source)
+			}
 			rr := recvResponse{
 				RecvResponseMagic: recvResponseMagic,
-				SourceId:          0,
-				Length:            5,
+				SourceId:          int32(message.Source),
+				Length:            int32(len(message.Message)),
 			}
-			message := []byte("abcde")
 			if err := binary.Write(w, binary.LittleEndian, &rr); err != nil {
 				return err
 			}
-			if n, err := w.Write(message); n < len(message) {
+			if n, err := w.Write(message.Message); n < len(message.Message) {
 				if err == nil {
 					err = io.ErrShortWrite
 				}
