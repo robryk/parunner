@@ -16,6 +16,7 @@ var nInstances = flag.Int("n", 1, fmt.Sprintf("Liczba instancji, z zakresu [1,%d
 var stdoutHandling = flag.String("stdout", "contest", "Obługa standardowego wyjścia: contest, all, tagged, files")
 var stderrHandling = flag.String("stderr", "all", "Obsługa standardowe wyjścia diagnostycznego: all, tagged, files")
 var filesPrefix = flag.String("prefix", "", "Prefiks nazwy plików wyjściowych generowanych przez -stdout=files i -stderr=files")
+
 var binaryPath string
 
 func outputFile(streamType string, i int) *os.File {
@@ -31,6 +32,54 @@ func outputFile(streamType string, i int) *os.File {
 	// XXX close them sometime
 	return file
 }
+
+type Instances []*Instance
+
+type InstanceError struct {
+	Id  int
+	Err error
+}
+
+func (ie InstanceError) Error() string {
+	return fmt.Sprintf("Błąd instancji %d: %v", ie.Id, ie.Err)
+}
+
+func (is Instances) Run() error {
+	var wg sync.WaitGroup
+	results := make(chan InstanceError, 1)
+	for i, instance := range is {
+		wg.Add(1)
+		go func(i int, instance *Instance) {
+			err := instance.Run()
+			if err != nil {
+				select {
+				case results <- InstanceError{i, err}:
+				default:
+				}
+			}
+			wg.Done()
+		}(i, instance)
+	}
+	go func() {
+		wg.Wait()
+		select {
+		case results <- InstanceError{}:
+		default:
+		}
+	}()
+	firstError := <-results
+	if firstError.Err != nil {
+		for _, instance := range is {
+			instance.Kill()
+		}
+	}
+	wg.Wait()
+	if firstError.Err != nil {
+		return firstError
+	}
+	return nil
+}
+
 func main() {
 	flag.Parse()
 	if flag.NArg() != 1 {
@@ -38,8 +87,9 @@ func main() {
 		os.Exit(1)
 	}
 	binaryPath = flag.Arg(0)
+
 	if *nInstances < 1 || *nInstances > MaxInstances {
-		fmt.Fprintf(os.Stderr, "Liczba instancji powinna być z zakresu [1,100], a podałeś %d\n", *nInstances)
+		fmt.Fprintf(os.Stderr, "Liczba instancji powinna być z zakresu [1,%d], a podałeś %d\n", MaxInstances, *nInstances)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -59,7 +109,6 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-
 	var makeStderr func(int) io.Writer
 	switch *stderrHandling {
 	case "all":
@@ -74,7 +123,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	instances := make([]*Instance, *nInstances)
+	instances := make(Instances, *nInstances)
 	stdinPipe, err := NewFilePipe()
 	if err != nil {
 		log.Fatal(err)
@@ -100,39 +149,8 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	type idAndError struct {
-		id  int
-		err error
-	}
-	var wg sync.WaitGroup
-	results := make(chan idAndError, 1)
-	for i, instance := range instances {
-		wg.Add(1)
-		go func(i int, instance *Instance) {
-			err := instance.Run()
-			if err != nil {
-				select {
-				case results <- idAndError{i, err}:
-				default:
-				}
-			}
-			wg.Done()
-		}(i, instance)
-	}
-	go func() {
-		wg.Wait()
-		select {
-		case results <- idAndError{}:
-		default:
-		}
-	}()
-	firstError := <-results
-	if firstError.err != nil {
-		for _, instance := range instances {
-			instance.Kill()
-		}
-		wg.Wait()
-		fmt.Fprintf(os.Stderr, "Instancja %d zakończyła się z błędem: %v\n", firstError.id, firstError.err)
+	if err := instances.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
