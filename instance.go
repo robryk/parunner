@@ -8,9 +8,11 @@ import (
 )
 
 type Instance struct {
-	id        int
-	instances []*Instance
-	cmd       *exec.Cmd
+	id               int
+	instances        []*Instance
+	cmd              *exec.Cmd
+	messagesSent     int
+	messageBytesSent int
 }
 
 // TODO: errors, communicate later, queues

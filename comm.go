@@ -40,7 +40,20 @@ type sendHeader struct {
 	// Message []byte
 }
 
+const MessageCountLimit = 1000
 const MessageSizeLimit = 8 * 1024 * 1024
+
+func (i *Instance) sendMessage(target int, message []byte) error {
+	i.messagesSent++
+	if i.messagesSent > MessageCountLimit {
+		return fmt.Errorf("Przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
+	}
+	i.messageBytesSent += len(message)
+	if i.messageBytesSent > MessageSizeLimit {
+		return fmt.Errorf("Przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
+	}
+	return nil
+}
 
 func (i *Instance) communicate(r io.ReadCloser, w io.WriteCloser) error {
 	defer w.Close()
@@ -68,7 +81,7 @@ func (i *Instance) communicate(r io.ReadCloser, w io.WriteCloser) error {
 				return err
 			}
 			if sh.Length < 0 || sh.Length > MessageSizeLimit {
-				return fmt.Errorf("Invalid size of a Message to be sent: %d", sh.Length)
+				return fmt.Errorf("Invalid size of a message to be sent: %d", sh.Length)
 			}
 			if sh.TargetId < 0 || sh.TargetId >= 100 {
 				return fmt.Errorf("Invalid target instance in a send request: %d", sh.TargetId)
@@ -80,7 +93,7 @@ func (i *Instance) communicate(r io.ReadCloser, w io.WriteCloser) error {
 			if _, err := io.ReadFull(r, message); err != nil {
 				return err
 			}
-			// send the message
+			i.sendMessage(int(sh.TargetId), message)
 		case recvOpType:
 			var rh recvHeader
 			if err := binary.Read(r, binary.LittleEndian, &rh); err != nil {

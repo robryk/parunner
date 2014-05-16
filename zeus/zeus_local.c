@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 
+#define MAX_MESSAGE_SIZE (8*1024*1024)
 #define MAGIC 1736434764
 #define SEND 3
 #define RECV 4
@@ -63,6 +64,8 @@ ZEUS(NodeId) ZEUS(MyNodeId)() {
 }
 
 void ZEUS(Send)(ZEUS(NodeId) target, const char* message, int bytes) {
+	assert(target >= 0 && target < nof_nodes);
+	assert(bytes <= MAX_MESSAGE_SIZE);
 	int i;
 	WriteByte(SEND);
 	WriteInt(target);
@@ -73,6 +76,7 @@ void ZEUS(Send)(ZEUS(NodeId) target, const char* message, int bytes) {
 }
 
 ZEUS(MessageInfo) ZEUS(Receive)(ZEUS(NodeId) source, char* buffer, int buffer_size) {
+	assert(source >= -1 && source < nof_nodes);
 	ZEUS(MessageInfo) mi;
 	int i;
 	WriteByte(RECV);
