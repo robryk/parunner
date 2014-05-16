@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"sync"
 )
 
 const MaxInstances = 100
@@ -88,6 +89,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
+	// XXX check the binary first?
 	for i := range instances {
 		cmd := exec.Command(flag.Arg(0))
 		cmd.Stdin = stdinPipe.Reader()
@@ -98,24 +100,39 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	for _, i := range instances {
-		if err := i.Start(); err != nil {
-			log.Fatal(err)
-		}
-		defer i.Kill()
+	type idAndError struct {
+		id  int
+		err error
 	}
-	errors := make([]error, len(instances))
+	var wg sync.WaitGroup
+	results := make(chan idAndError, 1)
 	for i, instance := range instances {
-		errors[i] = instance.cmd.Wait() // XXX -- read from a chan rather
+		wg.Add(1)
+		go func(i int, instance *Instance) {
+			err := instance.Run()
+			if err != nil {
+				select {
+				case results <- idAndError{i, err}:
+				default:
+				}
+			}
+			wg.Done()
+		}(i, instance)
 	}
-	ok := true
-	for i, e := range errors {
-		if e != nil {
-			fmt.Printf("Instancja %d zakończyła się błędem: %v\n", i, e)
-			ok = false
+	go func() {
+		wg.Wait()
+		select {
+		case results <- idAndError{}:
+		default:
 		}
-	}
-	if !ok {
+	}()
+	firstError := <-results
+	if firstError.err != nil {
+		for _, instance := range instances {
+			instance.Kill()
+		}
+		wg.Wait()
+		fmt.Fprintf(os.Stderr, "Instancja %d zakończyła się z błędem: %v\n", firstError.id, firstError.err)
 		os.Exit(1)
 	}
 }

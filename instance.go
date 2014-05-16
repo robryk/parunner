@@ -17,6 +17,8 @@ type Instance struct {
 
 	queues   []*MessageQueue
 	selector chan *MessageQueue
+
+	errChan chan error
 }
 
 // TODO: errors, communicate later, queues
@@ -40,21 +42,52 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 	if err != nil {
 		return nil, err
 	}
-	cmd.ExtraFiles = []*os.File{respr, cmdw} // XXX close these after Start()
+	cmd.ExtraFiles = []*os.File{respr, cmdw}
 	instance := &Instance{
 		id:        id,
 		instances: instances,
 		cmd:       cmd,
 		queues:    make([]*MessageQueue, len(instances)),
 		selector:  make(chan *MessageQueue),
+		errChan:   make(chan error, 1),
 	}
 	for i := range instance.queues {
 		// XXX teardown
 		instance.queues[i] = NewMessageQueue(instance.selector)
 	}
 
-	go instance.communicate(cmdr, respw) // XXX after init
+	go func() {
+		// XXX after init
+		if err := instance.communicate(cmdr, respw); err != nil {
+			select {
+			case instance.errChan <- err:
+			default:
+			}
+			instance.cmd.Process.Kill()
+		}
+		cmdr.Close()
+		respw.Close()
+	}()
 	return instance, nil
+}
+
+func (i *Instance) Run() error {
+	if err := i.cmd.Start(); err != nil {
+		return err
+	}
+	defer i.cmd.Process.Kill()
+	for _, f := range i.cmd.ExtraFiles {
+		if err := f.Close(); err != nil {
+			return err
+		}
+	}
+	go func() {
+		select {
+		case i.errChan <- i.cmd.Wait():
+		default:
+		}
+	}()
+	return <-i.errChan
 }
 
 func (i *Instance) Start() error {

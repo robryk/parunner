@@ -78,9 +78,7 @@ func (i *Instance) receiveAnyMessage() Message {
 	return message
 }
 
-func (i *Instance) communicate(r io.ReadCloser, w io.WriteCloser) error {
-	defer w.Close()
-	defer r.Close()
+func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 	h := header{
 		Magic:     magic,
 		NodeCount: int32(len(i.instances)),
