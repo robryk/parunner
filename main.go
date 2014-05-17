@@ -104,9 +104,8 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	instances := make(Instances, *nInstances)
-	messagesCh := make(chan Message, 1)
-	for i := range instances {
+	progs := make([]*exec.Cmd, *nInstances)
+	for i := range progs {
 		cmd := exec.Command(flag.Arg(0))
 		w, err := cmd.StdinPipe()
 		if err != nil {
@@ -119,22 +118,13 @@ func main() {
 		go io.Copy(w, stdinPipe.Reader())
 		cmd.Stdout = makeStdout(i)
 		cmd.Stderr = makeStderr(i)
-		instances[i], err = StartInstance(cmd, i, len(instances), messagesCh)
-		if err != nil {
-			// TODO: Cause previous instances to be terminated here.
-			log.Fatal(err)
-		}
+		progs[i] = cmd
 	}
-	go func() {
-		for m := range messagesCh {
-			instances[m.Target].PutMessage(m)
-		}
-	}()
-	if err := instances.Run(); err != nil {
+	instances, err := RunInstances(progs)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	close(messagesCh) // TODO: This is possibly racy with comm goroutines
 	for i, instance := range instances {
 		buf := instance.ShutdownQueues()
 		if *warnRemaining && len(buf) > 0 {

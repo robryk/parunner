@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os/exec"
 	"sync"
 )
-
-type Instances []*Instance
 
 // An error with the ID of the instance concerned attached.
 type InstanceError struct {
@@ -17,18 +16,27 @@ func (ie InstanceError) Error() string {
 	return fmt.Sprintf("Błąd instancji %d: %v", ie.ID, ie.Err)
 }
 
-// Run runs all the instances and waits for them all to terminate. If an instance
-// fails, Run kills the rest of the instances. Returns an InstanceError that wraps
-// the first error encountered.
-func (is Instances) Run() error {
+func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
+	messagesCh := make(chan Message, 1)
+	defer close(messagesCh) // TODO: Ensure that this can't race against comm goroutines
 	var wg sync.WaitGroup
 	results := make(chan error, 1)
-	for i, instance := range is {
-		wg.Add(1)
+	is := make([]*Instance, len(cmds))
+	for i, cmd := range cmds {
+		var err error
+		is[i], err = StartInstance(cmd, i, len(cmds), messagesCh)
+		if err != nil {
+			select {
+			case results <- InstanceError{i, err}:
+			default:
+			}
+			continue
+		}
 		defer func(instance *Instance) {
 			instance.Kill()
 			instance.Wait()
-		}(instance)
+		}(is[i])
+		wg.Add(1)
 		go func(i int, instance *Instance) {
 			err := instance.Wait()
 			if err != nil {
@@ -38,8 +46,13 @@ func (is Instances) Run() error {
 				}
 			}
 			wg.Done()
-		}(i, instance)
+		}(i, is[i])
 	}
+	go func() {
+		for m := range messagesCh {
+			is[m.Target].PutMessage(m)
+		}
+	}()
 	go func() {
 		wg.Wait()
 		select {
@@ -47,5 +60,5 @@ func (is Instances) Run() error {
 		default:
 		}
 	}()
-	return <-results
+	return is, <-results
 }
