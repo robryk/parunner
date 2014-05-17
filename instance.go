@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -32,7 +33,7 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 		cmd:       cmd,
 		queues:    make([]*MessageQueue, len(instances)),
 		selector:  make(chan *MessageQueue),
-		errChan:   make(chan error, 3),
+		errChan:   make(chan error, 4),
 	}
 	if cmd.Stdin != nil {
 		stdin := cmd.Stdin
@@ -81,6 +82,8 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 	return instance, nil
 }
 
+// Start the instance, wait until it exits and return the first error encountered while executing it.
+// Any errors encountered will cause the instance to be terminated.
 func (i *Instance) Run() error {
 	if err := i.cmd.Start(); err != nil {
 		return err
@@ -105,6 +108,22 @@ func (i *Instance) Run() error {
 	return <-i.errChan
 }
 
+func (i *Instance) ShutdownQueues() []Message {
+	buf := []Message(nil)
+	for _, q := range i.queues {
+		for _, m := range q.Shutdown() {
+			buf = append(buf, m.(Message))
+		}
+	}
+	return buf
+}
+
+var ErrKilled = errors.New("Killed by explicit request")
+
 func (i *Instance) Kill() error {
+	select {
+	case i.errChan <- ErrKilled:
+	default:
+	}
 	return i.cmd.Process.Kill()
 }
