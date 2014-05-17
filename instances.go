@@ -7,7 +7,7 @@ import (
 
 type Instances []*Instance
 
-// An error with an attached instance ID, where it has occurred.
+// An error with the ID of the instance concerned attached.
 type InstanceError struct {
 	Id  int
 	Err error
@@ -17,9 +17,9 @@ func (ie InstanceError) Error() string {
 	return fmt.Sprintf("Błąd instancji %d: %v", ie.Id, ie.Err)
 }
 
-// Run runs all the instances and wait for them all to terminate. If an instance fails,
-// run kills the rest of the instances. Returns an InstanceError that wraps the first
-// error encountered.
+// Run runs all the instances and waits for them all to terminate. If an instance
+// fails, Run kills the rest of the instances. Returns an InstanceError that wraps
+// the first error encountered.
 func (is Instances) Run() error {
 	var wg sync.WaitGroup
 	results := make(chan error, 1)
