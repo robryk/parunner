@@ -49,7 +49,7 @@ type Message struct {
 }
 
 func (i *Instance) putMessage(message Message) {
-	i.queues[message.Source].Put(message)
+	i.queues[message.Source].Put() <- message
 }
 
 func (i *Instance) sendMessage(targetId int, message []byte) error {
@@ -67,14 +67,14 @@ func (i *Instance) sendMessage(targetId int, message []byte) error {
 
 func (i *Instance) receiveMessage(sourceId int) Message {
 	// XXX unblocking when exiting
-	message := i.queues[sourceId].Get().(Message)
+	message := (<-i.queues[sourceId].Get()).(Message)
 	return message
 }
 
 func (i *Instance) receiveAnyMessage() Message {
 	// XXX unblocking when exiting
 	mq := <-i.selector
-	message := mq.Get().(Message)
+	message := (<-mq.Get()).(Message)
 	return message
 }
 

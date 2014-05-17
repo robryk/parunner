@@ -7,12 +7,12 @@ type MessageQueue struct {
 	selector chan *MessageQueue
 }
 
-func (mq *MessageQueue) Put(m interface{}) {
-	mq.inputCh <- m
+func (mq *MessageQueue) Put() chan<- interface{} {
+	return mq.inputCh
 }
 
-func (mq *MessageQueue) Get() interface{} {
-	return <-mq.outputCh
+func (mq *MessageQueue) Get() <-chan interface{} {
+	return mq.outputCh
 }
 
 func (mq *MessageQueue) Shutdown() []interface{} {

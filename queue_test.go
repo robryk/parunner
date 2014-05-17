@@ -7,7 +7,7 @@ import (
 
 func putRange(mq *MessageQueue, n int) {
 	for i := 0; i < n; i++ {
-		mq.Put(i)
+		mq.Put() <- i
 	}
 }
 
@@ -16,7 +16,7 @@ func TestQueueSimple(t *testing.T) {
 	const N = 1000
 	go putRange(mq, N)
 	for i := 0; i < N; i++ {
-		if got := mq.Get(); got != i {
+		if got := <-mq.Get(); got != i {
 			t.Errorf("When reading from a queue got=%v want=%v", got, i)
 		}
 	}
@@ -38,7 +38,7 @@ func TestQueueSelect(t *testing.T) {
 	go putRange(mq, N)
 	for i := 0; i < N; i++ {
 		_ = <-selector
-		if got := mq.Get(); got != i {
+		if got := <-mq.Get(); got != i {
 			t.Errorf("When reading from a queue got=%v want=%v", got, i)
 		}
 	}
