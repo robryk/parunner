@@ -26,8 +26,7 @@ type Instance struct {
 	err     error
 }
 
-// TODO: errors, communicate later, queues
-func NewInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages chan<- Message) (*Instance, error) {
+func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages chan<- Message) (*Instance, error) {
 	instance := &Instance{
 		id:               id,
 		totalInstances:   totalInstances,
@@ -46,12 +45,16 @@ func NewInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages cha
 		return nil, err
 	}
 	cmd.ExtraFiles = []*os.File{respr, cmdw}
-	for i := range instance.queues {
-		// XXX teardown
-		instance.queues[i] = NewMessageQueue(instance.selector)
+
+	if err := instance.cmd.Start(); err != nil {
+		return nil, err
 	}
 
-	instance.communicateGoroutine = func() {
+	for i := range instance.queues {
+		instance.queues[i] = NewMessageQueue(instance.selector)
+	}
+	// TODO: We should wait for this goroutine to finish in Wait()
+	go func() {
 		if err := instance.communicate(cmdr, respw); err != nil {
 			select {
 			case instance.errChan <- err:
@@ -61,18 +64,10 @@ func NewInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages cha
 		}
 		cmdr.Close()
 		respw.Close()
-	}
-	return instance, nil
-}
-
-func (i *Instance) Start() error {
-	if err := i.cmd.Start(); err != nil {
-		return err
-	}
-	go i.communicateGoroutine()
+	}()
 	go func() {
 		select {
-		case i.errChan <- i.cmd.Wait():
+		case instance.errChan <- instance.cmd.Wait():
 		default:
 		}
 		// We are doing it this late in order to delay error reports from communicate that are
@@ -82,12 +77,10 @@ func (i *Instance) Start() error {
 		// we ignore all of them.
 		// TODO: Do we want to ignore then also when the program has terminated with no errors?
 		//       Example: program has exited in the middle of sending a message.
-		for _, f := range i.cmd.ExtraFiles {
-			// TODO: should we ignore the error here?
-			f.Close()
-		}
+		respr.Close()
+		cmdw.Close()
 	}()
-	return nil
+	return instance, nil
 }
 
 func (i *Instance) Wait() error {

@@ -25,9 +25,6 @@ func (is Instances) Run() error {
 	results := make(chan error, 1)
 	for i, instance := range is {
 		wg.Add(1)
-		if err := instance.Start(); err != nil {
-			return InstanceError{i, err}
-		}
 		defer func(instance *Instance) {
 			instance.Kill()
 			instance.Wait()

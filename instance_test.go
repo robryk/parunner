@@ -34,11 +34,8 @@ func init() {
 }
 
 func startInstance(t *testing.T, cmd *exec.Cmd) *Instance {
-	instance, err := NewInstance(cmd, 0, 1, nil)
+	instance, err := StartInstance(cmd, 0, 1, nil)
 	if err != nil {
-		t.Fatalf("Error creating an instance for %s: %v", cmd.Path, err)
-	}
-	if err := instance.Start(); err != nil {
 		t.Fatalf("Error starting an instance for %s: %v", cmd.Path, err)
 	}
 	return instance

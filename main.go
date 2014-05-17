@@ -119,8 +119,9 @@ func main() {
 		go io.Copy(w, stdinPipe.Reader())
 		cmd.Stdout = makeStdout(i)
 		cmd.Stderr = makeStderr(i)
-		instances[i], err = NewInstance(cmd, i, len(instances), messagesCh)
+		instances[i], err = StartInstance(cmd, i, len(instances), messagesCh)
 		if err != nil {
+			// TODO: Cause previous instances to be terminated here.
 			log.Fatal(err)
 		}
 	}
