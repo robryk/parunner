@@ -34,16 +34,14 @@ func init() {
 }
 
 func startInstance(t *testing.T, cmd *exec.Cmd) *Instance {
-	instances := make([]*Instance, 1)
-	var err error
-	instances[0], err = NewInstance(cmd, 0, instances)
+	instance, err := NewInstance(cmd, 0, 1, nil)
 	if err != nil {
 		t.Fatalf("Error creating an instance for %s: %v", cmd.Path, err)
 	}
-	if err := instances[0].Start(); err != nil {
+	if err := instance.Start(); err != nil {
 		t.Fatalf("Error starting an instance for %s: %v", cmd.Path, err)
 	}
-	return instances[0]
+	return instance
 }
 
 func TestInstanceSuccess(t *testing.T) {
