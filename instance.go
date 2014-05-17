@@ -72,9 +72,6 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 	}
 
 	instance.communicateGoroutine = func() {
-		// XXX if the program terminates early, we might end up sending once it is already
-		// gone. In that case we don't want to report this error if the program errored.
-		// We might even want to never report this error.
 		if err := instance.communicate(cmdr, respw); err != nil {
 			select {
 			case instance.errChan <- err:
@@ -92,12 +89,6 @@ func (i *Instance) Start() error {
 	if err := i.cmd.Start(); err != nil {
 		return err
 	}
-	for _, f := range i.cmd.ExtraFiles {
-		if err := f.Close(); err != nil {
-			i.cmd.Process.Kill()
-			return err
-		}
-	}
 	if i.stdinCopier != nil {
 		go i.stdinCopier()
 	}
@@ -106,6 +97,17 @@ func (i *Instance) Start() error {
 		select {
 		case i.errChan <- i.cmd.Wait():
 		default:
+		}
+		// We are doing it this late in order to delay error reports from communicate that are
+		// a result of the pipes closing (broken pipe on write pipe, EOF on read pipe). We
+		// do want to ignore some of those errors (e.g. broken pipe at the very beginning, which
+		// indicates that the program didn't use the communication library at all), so currently
+		// we ignore all of them.
+		// TODO: Do we want to ignore then also when the program has terminated with no errors?
+		//       Example: program has exited in the middle of sending a message.
+		for _, f := range i.cmd.ExtraFiles {
+			// TODO: should we ignore the error here?
+			f.Close()
 		}
 	}()
 	return nil
