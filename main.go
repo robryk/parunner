@@ -89,7 +89,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	instances := make(Instances, *nInstances)
 	stdinPipe, err := NewFilePipe()
 	if err != nil {
 		log.Fatal(err)
@@ -105,7 +104,8 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	// XXX check the binary first?
+	instances := make(Instances, *nInstances)
+	messagesCh := make(chan Message, 1)
 	for i := range instances {
 		cmd := exec.Command(flag.Arg(0))
 		w, err := cmd.StdinPipe()
@@ -119,19 +119,26 @@ func main() {
 		go io.Copy(w, stdinPipe.Reader())
 		cmd.Stdout = makeStdout(i)
 		cmd.Stderr = makeStderr(i)
-		instances[i], err = NewInstance(cmd, i, instances)
+		instances[i], err = NewInstance(cmd, i, len(instances), messagesCh)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+	go func() {
+		for m := range messagesCh {
+			instances[m.Target].PutMessage(m)
+		}
+	}()
 	if err := instances.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	close(messagesCh) // TODO: This is possibly racy with comm goroutines
 	for i, instance := range instances {
 		buf := instance.ShutdownQueues()
 		if *warnRemaining && len(buf) > 0 {
 			fmt.Fprintf(os.Stderr, "Uwaga: Instancja %d nie odebrała %d wiadomości dla niej przeznaczonych przed swoim zakończeniem.\n", i, len(buf))
 		}
 	}
+	// TODO: We don't wait for stdout/err to actually get flushed. We should.
 }

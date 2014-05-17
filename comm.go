@@ -45,10 +45,11 @@ const MessageSizeLimit = 8 * 1024 * 1024
 
 type Message struct {
 	Source  int
+	Target  int
 	Message []byte
 }
 
-func (i *Instance) putMessage(message Message) {
+func (i *Instance) PutMessage(message Message) {
 	i.queues[message.Source].Put() <- message
 }
 
@@ -61,7 +62,7 @@ func (i *Instance) sendMessage(targetID int, message []byte) error {
 	if i.messageBytesSent > MessageSizeLimit {
 		return fmt.Errorf("przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
 	}
-	i.instances[targetID].putMessage(Message{Source: i.id, Message: message})
+	i.outgoingMessages <- Message{Source: i.id, Target: targetID, Message: message}
 	return nil
 }
 
@@ -81,7 +82,7 @@ func (i *Instance) receiveAnyMessage() Message {
 func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 	h := header{
 		Magic:     magic,
-		NodeCount: int32(len(i.instances)),
+		NodeCount: int32(i.totalInstances),
 		NodeID:    int32(i.id),
 	}
 	if err := binary.Write(w, binary.LittleEndian, &h); err != nil {

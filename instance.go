@@ -8,9 +8,10 @@ import (
 )
 
 type Instance struct {
-	id        int
-	instances []*Instance
-	cmd       *exec.Cmd
+	id               int
+	totalInstances   int
+	outgoingMessages chan<- Message
+	cmd              *exec.Cmd
 
 	communicateGoroutine func()
 
@@ -26,14 +27,15 @@ type Instance struct {
 }
 
 // TODO: errors, communicate later, queues
-func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error) {
+func NewInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages chan<- Message) (*Instance, error) {
 	instance := &Instance{
-		id:        id,
-		instances: instances,
-		cmd:       cmd,
-		queues:    make([]*MessageQueue, len(instances)),
-		selector:  make(chan *MessageQueue),
-		errChan:   make(chan error, 4),
+		id:               id,
+		totalInstances:   totalInstances,
+		outgoingMessages: outgoingMessages,
+		cmd:              cmd,
+		queues:           make([]*MessageQueue, totalInstances),
+		selector:         make(chan *MessageQueue),
+		errChan:          make(chan error, 4),
 	}
 	cmdr, cmdw, err := os.Pipe()
 	if err != nil {
