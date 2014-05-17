@@ -41,12 +41,24 @@ func startInstance(t *testing.T, cmd *exec.Cmd) *Instance {
 	return instance
 }
 
+func checkedWait(t *testing.T, instance *Instance) error {
+	ch := make(chan error, 1)
+	go func() {
+		ch <- instance.Wait()
+	}()
+	err := instance.Wait()
+	if err1 := <-ch; err1 != err {
+		t.Errorf("Instance.Wait() gave contradictory return values: %v != %v", err, err1)
+	}
+	return err
+}
+
 func TestInstanceSuccess(t *testing.T) {
 	if trueBinary == "" {
 		t.Skip("No /bin/true equivalent found")
 	}
 	instance := startInstance(t, exec.Command(trueBinary))
-	if err := instance.Wait(); err != nil {
+	if err := checkedWait(t, instance); err != nil {
 		t.Fatalf("Error running %s: %v", trueBinary, err)
 	}
 }
@@ -56,7 +68,7 @@ func TestInstanceFailure(t *testing.T) {
 		t.Skip("No /bin/false equivalent found")
 	}
 	instance := startInstance(t, exec.Command(falseBinary))
-	if err := instance.Wait(); err == nil {
+	if err := checkedWait(t, instance); err == nil {
 		t.Fatalf("No error when running %s", falseBinary)
 	}
 }
@@ -73,7 +85,7 @@ func TestInstanceKill(t *testing.T) {
 	instance := startInstance(t, cmd)
 	waitChan := make(chan error)
 	go func() {
-		waitChan <- instance.Wait()
+		waitChan <- checkedWait(t, instance)
 	}()
 	// The instance shouldn't finish of its own accord
 	select {
