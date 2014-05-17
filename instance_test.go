@@ -98,3 +98,5 @@ func TestInstanceKill(t *testing.T) {
 		t.Errorf("A killed instance has finished with error %v, instead of %v", err, ErrKilled)
 	}
 }
+
+// TODO: Tests for communication goroutine
