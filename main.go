@@ -81,6 +81,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer stdinPipe.Release()
 	go func() {
 		_, err := io.Copy(stdinPipe, os.Stdin)
 		if err != nil {

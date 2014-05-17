@@ -7,6 +7,7 @@ import (
 	"sync"
 )
 
+// FilePipe is a tailable buffer backed by a file.
 type FilePipe struct {
 	f *os.File
 
@@ -16,8 +17,8 @@ type FilePipe struct {
 	closing bool
 }
 
+// Create a new FilePipe backed by a temporary file.
 func NewFilePipe() (*FilePipe, error) {
-	// TODO: close and remove the file sometime
 	f, err := ioutil.TempFile("", "filepipe")
 	if err != nil {
 		return nil, err
@@ -27,6 +28,21 @@ func NewFilePipe() (*FilePipe, error) {
 	return fp, nil
 }
 
+// Release the resources associated with the filepipe. In particular,
+// remove the backing file. After this call has been made no readers
+// of this filepipe should be used.
+func (fp *FilePipe) Release() error {
+	fp.Close()
+	filename := fp.f.Name()
+	err := fp.f.Close()
+	if err1 := os.Remove(filename); err == nil {
+		err = err1
+	}
+	return err
+}
+
+// Create a new reader that starts reading the filepipe's contents from
+// the very beginning.
 func (fp *FilePipe) Reader() io.Reader {
 	return &filePipeReader{fp: fp, pos: 0}
 }
