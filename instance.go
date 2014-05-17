@@ -128,7 +128,7 @@ func (i *Instance) ShutdownQueues() []Message {
 	return buf
 }
 
-var ErrKilled = errors.New("Killed by explicit request")
+var ErrKilled = errors.New("killed by an explicit request")
 
 func (i *Instance) Kill() error {
 	select {

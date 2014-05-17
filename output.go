@@ -31,7 +31,7 @@ func (cs *ContestStdout) Create(i int) io.Writer {
 			}
 			io.Copy(cs.Output, pr)
 		} else {
-			pr.CloseWithError(fmt.Errorf("Instancja %d zaczęła już wypisywać wyjście", cs.chosenInstance))
+			pr.CloseWithError(fmt.Errorf("instancja %d zaczęła już wypisywać wyjście", cs.chosenInstance))
 		}
 	}()
 	return pw

@@ -9,12 +9,12 @@ type Instances []*Instance
 
 // An error with the ID of the instance concerned attached.
 type InstanceError struct {
-	Id  int
+	ID  int
 	Err error
 }
 
 func (ie InstanceError) Error() string {
-	return fmt.Sprintf("Błąd instancji %d: %v", ie.Id, ie.Err)
+	return fmt.Sprintf("Błąd instancji %d: %v", ie.ID, ie.Err)
 }
 
 // Run runs all the instances and waits for them all to terminate. If an instance

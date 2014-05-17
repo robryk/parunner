@@ -18,24 +18,24 @@ const recvOpType = 4
 type header struct {
 	Magic     uint32
 	NodeCount int32
-	NodeId    int32
+	NodeID    int32
 }
 
 type recvResponse struct {
 	RecvResponseMagic uint32
-	SourceId          int32
+	SourceID          int32
 	Length            int32
 	// Message []byte
 }
 
 type recvHeader struct {
 	// OpType byte
-	SourceId int32
+	SourceID int32
 }
 
 type sendHeader struct {
 	// OpType byte
-	TargetId int32
+	TargetID int32
 	Length   int32
 	// Message []byte
 }
@@ -52,22 +52,22 @@ func (i *Instance) putMessage(message Message) {
 	i.queues[message.Source].Put() <- message
 }
 
-func (i *Instance) sendMessage(targetId int, message []byte) error {
+func (i *Instance) sendMessage(targetID int, message []byte) error {
 	i.messagesSent++
 	if i.messagesSent > MessageCountLimit {
-		return fmt.Errorf("Przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
+		return fmt.Errorf("przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
 	}
 	i.messageBytesSent += len(message)
 	if i.messageBytesSent > MessageSizeLimit {
-		return fmt.Errorf("Przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
+		return fmt.Errorf("przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
 	}
-	i.instances[targetId].putMessage(Message{Source: i.id, Message: message})
+	i.instances[targetID].putMessage(Message{Source: i.id, Message: message})
 	return nil
 }
 
-func (i *Instance) receiveMessage(sourceId int) Message {
+func (i *Instance) receiveMessage(sourceID int) Message {
 	// XXX unblocking when exiting
-	message := (<-i.queues[sourceId].Get()).(Message)
+	message := (<-i.queues[sourceID].Get()).(Message)
 	return message
 }
 
@@ -82,7 +82,7 @@ func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 	h := header{
 		Magic:     magic,
 		NodeCount: int32(len(i.instances)),
-		NodeId:    int32(i.id),
+		NodeID:    int32(i.id),
 	}
 	if err := binary.Write(w, binary.LittleEndian, &h); err != nil {
 		return err
@@ -102,45 +102,45 @@ func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 				return err
 			}
 			if sh.Length < 0 || sh.Length > MessageSizeLimit {
-				return fmt.Errorf("Invalid size of a message to be sent: %d", sh.Length)
+				return fmt.Errorf("invalid size of a message to be sent: %d", sh.Length)
 			}
-			if sh.TargetId < 0 || sh.TargetId >= 100 {
-				return fmt.Errorf("Invalid target instance in a send request: %d", sh.TargetId)
+			if sh.TargetID < 0 || sh.TargetID >= 100 {
+				return fmt.Errorf("invalid target instance in a send request: %d", sh.TargetID)
 			}
 			if *traceCommunications {
-				log.Printf("Instancja %d wysyła %d bajtów do instancji %d.", i.id, sh.Length, sh.TargetId)
+				log.Printf("Instancja %d wysyła %d bajtów do instancji %d.", i.id, sh.Length, sh.TargetID)
 			}
 			message := make([]byte, sh.Length)
 			if _, err := io.ReadFull(r, message); err != nil {
 				return err
 			}
-			i.sendMessage(int(sh.TargetId), message)
+			i.sendMessage(int(sh.TargetID), message)
 		case recvOpType:
 			var rh recvHeader
 			if err := binary.Read(r, binary.LittleEndian, &rh); err != nil {
 				return err
 			}
-			if rh.SourceId < -1 || rh.SourceId >= 100 {
-				return fmt.Errorf("Invalid source instance in a receive request: %d", rh.SourceId)
+			if rh.SourceID < -1 || rh.SourceID >= 100 {
+				return fmt.Errorf("invalid source instance in a receive request: %d", rh.SourceID)
 			}
 			var message Message
-			if rh.SourceId == -1 {
+			if rh.SourceID == -1 {
 				if *traceCommunications {
 					log.Printf("Instancja %d czeka na wiadomość od dowolnej innej instancji.", i.id)
 				}
 				message = i.receiveAnyMessage()
 			} else {
 				if *traceCommunications {
-					log.Printf("Instancja %d czeka na wiadomość od instancji %d.", i.id, rh.SourceId)
+					log.Printf("Instancja %d czeka na wiadomość od instancji %d.", i.id, rh.SourceID)
 				}
-				message = i.receiveMessage(int(rh.SourceId))
+				message = i.receiveMessage(int(rh.SourceID))
 			}
 			if *traceCommunications {
 				log.Printf("Instancja %d odebrała wiadomość od instancji %d.", i.id, message.Source)
 			}
 			rr := recvResponse{
 				RecvResponseMagic: recvResponseMagic,
-				SourceId:          int32(message.Source),
+				SourceID:          int32(message.Source),
 				Length:            int32(len(message.Message)),
 			}
 			if err := binary.Write(w, binary.LittleEndian, &rr); err != nil {
@@ -153,7 +153,7 @@ func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 				return err
 			}
 		default:
-			return fmt.Errorf("Invalid operation type %x", opType[0])
+			return fmt.Errorf("invalid operation type %x", opType[0])
 		}
 	}
 }
