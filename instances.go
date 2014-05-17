@@ -23,6 +23,7 @@ func (ie InstanceError) Error() string {
 func (is Instances) Run() error {
 	var wg sync.WaitGroup
 	results := make(chan error, 1)
+	quit := make(chan bool)
 	for i, instance := range is {
 		wg.Add(1)
 		go func(i int, instance *Instance) {

@@ -33,10 +33,23 @@ func outputFile(streamType string, i int) *os.File {
 	return file
 }
 
+func Usage() {
+	fmt.Fprintf(os.Stderr, "Uzycie: %s [opcje] program_do_uruchomienia\n", os.Args[0])
+	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, `Sposoby obsługi wyjścia:
+  contest: Wymuszaj, żeby tylko jedna instancja pisała na standardowe wyjście. Przekieruj jej wyjście na standardowe wyjście tego programu.
+  all: Przekieruj wyjście wszystkich instancji na analogiczne wyjście tego programu.
+  tagged: Przekieruj wyjście wszystkich instancji na analogiczne wyjście tego programy, dopisując numer instancji na początku każdej linijki.
+  files: Zapisz wyjście każdej instancji w osobnym pliku.
+`)
+}
+
 func main() {
+	flag.Usage = Usage
 	flag.Parse()
 	if flag.NArg() != 1 {
-		fmt.Fprintf(os.Stderr, "Podaj nazwe programu XXX")
+		fmt.Fprintf(os.Stderr, "Nie podałeś programu do uruchomienia\n")
+		flag.Usage()
 		os.Exit(1)
 	}
 	binaryPath = flag.Arg(0)
