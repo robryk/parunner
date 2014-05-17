@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"sync"
 )
 
 type Instance struct {
@@ -23,6 +24,8 @@ type Instance struct {
 	selector chan *MessageQueue
 
 	errChan chan error
+	errOnce sync.Once
+	err     error
 }
 
 // TODO: errors, communicate later, queues
@@ -69,6 +72,9 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 	}
 
 	instance.communicateGoroutine = func() {
+		// XXX if the program terminates early, we might end up sending once it is already
+		// gone. In that case we don't want to report this error if the program errored.
+		// We might even want to never report this error.
 		if err := instance.communicate(cmdr, respw); err != nil {
 			select {
 			case instance.errChan <- err:
@@ -82,19 +88,16 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 	return instance, nil
 }
 
-// Start the instance, wait until it exits and return the first error encountered while executing it.
-// Any errors encountered will cause the instance to be terminated.
-func (i *Instance) Run() error {
+func (i *Instance) Start() error {
 	if err := i.cmd.Start(); err != nil {
 		return err
 	}
-	defer i.cmd.Process.Kill()
 	for _, f := range i.cmd.ExtraFiles {
 		if err := f.Close(); err != nil {
+			i.cmd.Process.Kill()
 			return err
 		}
 	}
-
 	if i.stdinCopier != nil {
 		go i.stdinCopier()
 	}
@@ -105,7 +108,14 @@ func (i *Instance) Run() error {
 		default:
 		}
 	}()
-	return <-i.errChan
+	return nil
+}
+
+func (i *Instance) Wait() error {
+	i.errOnce.Do(func() {
+		i.err = <-i.errChan
+	})
+	return i.err
 }
 
 func (i *Instance) ShutdownQueues() []Message {

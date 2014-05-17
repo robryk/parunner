@@ -23,11 +23,17 @@ func (ie InstanceError) Error() string {
 func (is Instances) Run() error {
 	var wg sync.WaitGroup
 	results := make(chan error, 1)
-	quit := make(chan bool)
 	for i, instance := range is {
 		wg.Add(1)
+		if err := instance.Start(); err != nil {
+			return InstanceError{i, err}
+		}
+		defer func(instance *Instance) {
+			instance.Kill()
+			instance.Wait()
+		}(instance)
 		go func(i int, instance *Instance) {
-			err := instance.Run()
+			err := instance.Wait()
 			if err != nil {
 				select {
 				case results <- InstanceError{i, err}:
@@ -44,12 +50,5 @@ func (is Instances) Run() error {
 		default:
 		}
 	}()
-	firstError := <-results
-	if firstError != nil {
-		for _, instance := range is {
-			instance.Kill()
-		}
-	}
-	wg.Wait()
-	return firstError
+	return <-results
 }
