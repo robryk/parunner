@@ -2,8 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
-	"log"
 	"os"
 	"os/exec"
 	"sync"
@@ -14,7 +12,6 @@ type Instance struct {
 	instances []*Instance
 	cmd       *exec.Cmd
 
-	stdinCopier          func()
 	communicateGoroutine func()
 
 	messagesSent     int
@@ -37,25 +34,6 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 		queues:    make([]*MessageQueue, len(instances)),
 		selector:  make(chan *MessageQueue),
 		errChan:   make(chan error, 4),
-	}
-	if cmd.Stdin != nil {
-		stdin := cmd.Stdin
-		cmd.Stdin = nil
-		stdinPipe, err := cmd.StdinPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		instance.stdinCopier = func() {
-			defer stdinPipe.Close()
-			_, err := io.Copy(stdinPipe, stdin)
-			if err != nil {
-				select {
-				case instance.errChan <- err:
-				default:
-				}
-				instance.cmd.Process.Kill()
-			}
-		}
 	}
 	cmdr, cmdw, err := os.Pipe()
 	if err != nil {
@@ -88,9 +66,6 @@ func NewInstance(cmd *exec.Cmd, id int, instances []*Instance) (*Instance, error
 func (i *Instance) Start() error {
 	if err := i.cmd.Start(); err != nil {
 		return err
-	}
-	if i.stdinCopier != nil {
-		go i.stdinCopier()
 	}
 	go i.communicateGoroutine()
 	go func() {

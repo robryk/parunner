@@ -108,7 +108,15 @@ func main() {
 	// XXX check the binary first?
 	for i := range instances {
 		cmd := exec.Command(flag.Arg(0))
-		cmd.Stdin = stdinPipe.Reader()
+		w, err := cmd.StdinPipe()
+		if err != nil {
+			log.Fatal(err)
+		}
+		// TODO: We care about errors from the reader, but not about broken pipes on the writer.
+		// We don't care about the exact instance that the error manifested on, because it's cannot
+		// be caused by the instance itself. We probably want to log.Fatal(err) on anything but a broken
+		// pipe.
+		go io.Copy(w, stdinPipe.Reader())
 		cmd.Stdout = makeStdout(i)
 		cmd.Stderr = makeStderr(i)
 		instances[i], err = NewInstance(cmd, i, instances)

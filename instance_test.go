@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -72,9 +71,9 @@ func TestInstanceKill(t *testing.T) {
 		t.Skip("No /bin/cat equivalent found")
 	}
 	cmd := exec.Command(catBinary)
-	r, _ := io.Pipe()
-	defer r.Close()
-	cmd.Stdin = r
+	if _, err := cmd.StdinPipe(); err != nil {
+		t.Fatalf("error in Cmd.StdinPipe: %v", err)
+	}
 	cmd.Stdout = ioutil.Discard
 	instance := startInstance(t, cmd)
 	waitChan := make(chan error)
