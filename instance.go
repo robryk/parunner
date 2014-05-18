@@ -13,8 +13,6 @@ type Instance struct {
 	outgoingMessages chan<- Message
 	cmd              *exec.Cmd
 
-	communicateGoroutine func()
-
 	messagesSent     int
 	messageBytesSent int
 

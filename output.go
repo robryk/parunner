@@ -13,37 +13,35 @@ type ContestStdout struct {
 	chooseInstance sync.Once
 }
 
-func (cs *ContestStdout) Create(i int) io.Writer {
-	pr, pw := io.Pipe()
-	go func() {
-		var buf [1]byte
-		_, err := pr.Read(buf[:])
-		if err != nil {
-			// We want to quit on EOF and ignore errors
-			return
+func (cs *ContestStdout) Write(i int, r io.Reader) error {
+	var buf [1]byte
+	_, err := r.Read(buf[:])
+	if err != nil {
+		if err == io.EOF {
+			err = nil
 		}
-		cs.chooseInstance.Do(func() {
-			cs.chosenInstance = i
-		})
-		if cs.chosenInstance == i {
-			if _, err := cs.Output.Write(buf[:]); err != nil {
-				return
-			}
-			io.Copy(cs.Output, pr)
-		} else {
-			pr.CloseWithError(fmt.Errorf("instancja %d zaczęła już wypisywać wyjście", cs.chosenInstance))
+		return err
+	}
+	cs.chooseInstance.Do(func() {
+		cs.chosenInstance = i
+	})
+	if cs.chosenInstance == i {
+		if _, err := cs.Output.Write(buf[:]); err != nil {
+			return err
 		}
-	}()
-	return pw
+		_, err := io.Copy(cs.Output, r)
+		return err
+	} else {
+		return fmt.Errorf("instancja %d zaczęła już wypisywać wyjście", cs.chosenInstance)
+	}
 }
 
-func TagStream(tag string, w io.Writer) io.Writer {
-	pr, pw := io.Pipe()
-	go func() {
-		sc := bufio.NewScanner(pr)
-		for sc.Scan() {
-			fmt.Fprintf(w, "%s%s\n", tag, sc.Text())
+func TagStream(tag string, w io.Writer, r io.Reader) error {
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		if _, err := fmt.Fprintf(w, "%s%s\n", tag, sc.Text()); err != nil {
+			return err
 		}
-	}()
-	return pw
+	}
+	return sc.Err()
 }

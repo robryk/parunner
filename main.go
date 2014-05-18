@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 	"os/exec"
 )
 
@@ -19,18 +20,21 @@ var warnRemaining = flag.Bool("warn_unreceived", true, "Ostrzegaj o wiadomościa
 
 var binaryPath string
 
-func outputFile(streamType string, i int) *os.File {
+func writeFile(streamType string, i int, r io.Reader) error {
 	basename := binaryPath // XXX -- remove extension
 	if *filesPrefix != "" {
 		basename = *filesPrefix
 	}
 	filename := fmt.Sprintf("%s.%s.%d", basename, streamType, i)
-	file, err := os.Create(filename)
+	f, err := os.Create(filename)
 	if err != nil {
-		log.Fatal(err) // XXX
+		return err
 	}
-	// XXX close them sometime
-	return file
+	_, err = io.Copy(f, r)
+	if err1 := f.Close(); err == nil {
+		err = err1
+	}
+	return err
 }
 
 func Usage() {
@@ -59,30 +63,28 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	var makeStdout func(int) io.Writer
+	var writeStdout func(int, io.Reader) error
 	switch *stdoutHandling {
 	case "contest":
 		cs := ContestStdout{Output: os.Stdout}
-		makeStdout = cs.Create
+		writeStdout = cs.Write
 	case "all":
-		makeStdout = func(int) io.Writer { return os.Stdout }
 	case "tagged":
-		makeStdout = func(i int) io.Writer { return TagStream(fmt.Sprintf("STDOUT %d: ", i), os.Stdout) }
+		writeStdout = func(i int, r io.Reader) error { return TagStream(fmt.Sprintf("STDOUT %d: ", i), os.Stdout, r) }
 	case "files":
-		makeStdout = func(i int) io.Writer { return outputFile("stdout", i) }
+		writeStdout = func(i int, r io.Reader) error { return writeFile("stdout", i, r) }
 	default:
 		fmt.Fprintf(os.Stderr, "Niewłaściwa metoda obsługi standardowego wyjścia: %s", *stdoutHandling)
 		flag.Usage()
 		os.Exit(1)
 	}
-	var makeStderr func(int) io.Writer
+	var writeStderr func(int, io.Reader) error
 	switch *stderrHandling {
 	case "all":
-		makeStderr = func(int) io.Writer { return os.Stderr }
 	case "tagged":
-		makeStderr = func(i int) io.Writer { return TagStream(fmt.Sprintf("STDERR %d: ", i), os.Stderr) }
+		writeStderr = func(i int, r io.Reader) error { return TagStream(fmt.Sprintf("STDERR %d: ", i), os.Stderr, r) }
 	case "files":
-		makeStderr = func(i int) io.Writer { return outputFile("stderr", i) }
+		writeStdout = func(i int, r io.Reader) error { return writeFile("stderr", i, r) }
 	default:
 		fmt.Fprintf(os.Stderr, "Niewłaściwa metoda obsługi standardowego wyjścia diagnostycznego: %s", *stdoutHandling)
 		flag.Usage()
@@ -105,6 +107,8 @@ func main() {
 		}
 	}()
 	progs := make([]*exec.Cmd, *nInstances)
+	var wg sync.WaitGroup
+	closeAfterWait := []io.Closer{}
 	for i := range progs {
 		cmd := exec.Command(flag.Arg(0))
 		w, err := cmd.StdinPipe()
@@ -116,11 +120,30 @@ func main() {
 		// be caused by the instance itself. We probably want to log.Fatal(err) on anything but a broken
 		// pipe.
 		go io.Copy(w, stdinPipe.Reader())
-		cmd.Stdout = makeStdout(i)
-		cmd.Stderr = makeStderr(i)
+		makeFromWrite := func(writeProc func(int, io.Reader) error, w io.Writer) io.Writer {
+			if writeProc == nil {
+				return w
+			}
+			pr, pw := io.Pipe()
+			closeAfterWait = append(closeAfterWait, pw)
+			i := i
+			wg.Add(1)
+			go func() {
+				err := writeProc(i, pr)
+				pr.CloseWithError(err) // TODO: Shouldn't we kill the instance if err!=nil?
+				wg.Done()
+			}()
+			return pw
+		}
+		cmd.Stdout = makeFromWrite(writeStdout, os.Stdout)
+		cmd.Stderr = makeFromWrite(writeStderr, os.Stderr)
 		progs[i] = cmd
 	}
 	instances, err := RunInstances(progs)
+	for _, f := range closeAfterWait {
+		f.Close()
+	}
+	wg.Wait()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -131,5 +154,4 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Uwaga: Instancja %d nie odebrała %d wiadomości dla niej przeznaczonych przed swoim zakończeniem.\n", i, len(buf))
 		}
 	}
-	// TODO: We don't wait for stdout/err to actually get flushed. We should.
 }
