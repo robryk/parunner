@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// An error with the ID of the instance concerned attached.
+// InstanceError is an error with an associated instance ID
 type InstanceError struct {
 	ID  int
 	Err error
@@ -16,6 +16,13 @@ func (ie InstanceError) Error() string {
 	return fmt.Sprintf("Błąd instancji %d: %v", ie.ID, ie.Err)
 }
 
+// RunInstances starts one instance for each command in cmds, waits for
+// them to terminate and returns the instances themselves and the first
+// error that has occurred. The instances returned are always valid,
+// even if the error is non-nil. Each command in cmds is started, even
+// if some of them fail to start. The error returned is always an InstanceError
+// that indicated which instance caused the error. If an error occurs, all
+// the rest of the instances are terminated early.
 func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 	messagesCh := make(chan Message, 1)
 	var wg sync.WaitGroup
