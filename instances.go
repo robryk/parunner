@@ -18,8 +18,16 @@ func (ie InstanceError) Error() string {
 
 func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 	messagesCh := make(chan Message, 1)
-	defer close(messagesCh) // TODO: Ensure that this can't race against comm goroutines
 	var wg sync.WaitGroup
+
+	defer func() {
+		wg.Wait()
+		// This channel has to be closed _after_ all the instances have terminated,
+		// because it's written to by the instances when they send a message.
+		// Thus, we close it only after observing that wg is empty.
+		close(messagesCh)
+	}()
+
 	results := make(chan error, 1)
 	is := make([]*Instance, len(cmds))
 	for i, cmd := range cmds {
@@ -32,10 +40,7 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 			}
 			continue
 		}
-		defer func(instance *Instance) {
-			instance.Kill()
-			instance.Wait()
-		}(is[i])
+		defer is[i].Kill()
 		wg.Add(1)
 		go func(i int, instance *Instance) {
 			err := instance.Wait()
