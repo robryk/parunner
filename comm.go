@@ -53,14 +53,17 @@ func (i *Instance) PutMessage(message Message) {
 	i.queues[message.Source].Put() <- message
 }
 
+var ErrMessageCount = fmt.Errorf("przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
+var ErrMessageSize = fmt.Errorf("przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
+
 func (i *Instance) sendMessage(targetID int, message []byte) error {
 	i.messagesSent++
 	if i.messagesSent > MessageCountLimit {
-		return fmt.Errorf("przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
+		return ErrMessageCount
 	}
 	i.messageBytesSent += len(message)
 	if i.messageBytesSent > MessageSizeLimit {
-		return fmt.Errorf("przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
+		return ErrMessageSize
 	}
 	i.outgoingMessages <- Message{Source: i.id, Target: targetID, Message: message}
 	return nil
