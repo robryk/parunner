@@ -70,16 +70,29 @@ func (i *Instance) sendMessage(targetID int, message []byte) error {
 }
 
 func (i *Instance) receiveMessage(sourceID int) Message {
-	// XXX unblocking when exiting
-	message := (<-i.queues[sourceID].Get()).(Message)
-	return message
+	// TODO: This is ugly. Make it possible to shut down read-side of an MQ.
+	select {
+	case message := <-i.queues[sourceID].Get():
+		return message.(Message)
+	case <-i.waitDone:
+		return Message{} // we can return whatever here, it will get ignored
+	}
 }
 
 func (i *Instance) receiveAnyMessage() Message {
-	// XXX unblocking when exiting
-	mq := <-i.selector
-	message := (<-mq.Get()).(Message)
-	return message
+	// TODO: This is ugly. Make it possible to shut down read-side of an MQ.
+	var mq *MessageQueue
+	select {
+	case mq = <-i.selector:
+	case <-i.waitDone:
+		return Message{} // we can return whatever here, it will get ignored
+	}
+	select {
+	case message := <-mq.Get():
+		return message.(Message)
+	case <-i.waitDone:
+		return Message{} // we can return whatever here, it will get ignored
+	}
 }
 
 func (i *Instance) communicate(r io.Reader, w io.Writer) error {

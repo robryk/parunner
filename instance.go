@@ -19,9 +19,10 @@ type Instance struct {
 	queues   []*MessageQueue
 	selector chan *MessageQueue
 
-	errOnce sync.Once
-	err     error
-	wg      sync.WaitGroup
+	errOnce  sync.Once
+	err      error
+	waitDone chan bool
+	commDone chan bool
 }
 
 func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages chan<- Message) (*Instance, error) {
@@ -32,6 +33,8 @@ func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages c
 		cmd:              cmd,
 		queues:           make([]*MessageQueue, totalInstances),
 		selector:         make(chan *MessageQueue),
+		waitDone:         make(chan bool),
+		commDone:         make(chan bool),
 	}
 	cmdr, cmdw, err := os.Pipe()
 	if err != nil {
@@ -50,7 +53,6 @@ func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages c
 	for i := range instance.queues {
 		instance.queues[i] = NewMessageQueue(instance.selector)
 	}
-	instance.wg.Add(1)
 	go func() {
 		if err := instance.communicate(cmdr, respw); err != nil {
 			instance.errOnce.Do(func() {
@@ -60,9 +62,8 @@ func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages c
 		}
 		cmdr.Close()
 		respw.Close()
-		instance.wg.Done()
+		close(instance.commDone)
 	}()
-	instance.wg.Add(1)
 	go func() {
 		err := instance.cmd.Wait()
 		instance.errOnce.Do(func() {
@@ -77,13 +78,14 @@ func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages c
 		//       Example: program has exited in the middle of sending a message.
 		respr.Close()
 		cmdw.Close()
-		instance.wg.Done()
+		close(instance.waitDone)
 	}()
 	return instance, nil
 }
 
 func (i *Instance) Wait() error {
-	i.wg.Wait()
+	<-i.waitDone
+	<-i.commDone
 	return i.err
 }
 

@@ -6,8 +6,8 @@ import (
 	"io"
 	"log"
 	"os"
-	"sync"
 	"os/exec"
+	"sync"
 )
 
 const MaxInstances = 100

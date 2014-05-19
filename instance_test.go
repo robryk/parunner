@@ -100,3 +100,4 @@ func TestInstanceKill(t *testing.T) {
 }
 
 // TODO: Tests for communication goroutine
+// TODO: Test death of an executable in the middle of receiving
