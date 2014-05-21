@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"sync"
 )
 
@@ -25,6 +26,7 @@ func NewFilePipe() (*FilePipe, error) {
 	}
 	fp := &FilePipe{f: f}
 	fp.cond.L = &fp.mu
+	runtime.SetFinalizer(fp, (*FilePipe).Release)
 	return fp, nil
 }
 
