@@ -6,6 +6,9 @@ import (
 	"os/exec"
 	"testing"
 	"time"
+	"path/filepath"
+	"strings"
+	"bytes"
 )
 
 var catBinary string
@@ -99,5 +102,45 @@ func TestInstanceKill(t *testing.T) {
 	}
 }
 
-// TODO: Tests for communication goroutine
-// TODO: Test death of an executable in the middle of receiving
+func TestInstanceComm(t *testing.T) {
+	testerBinary := filepath.Join("zeus", "tester")
+	const inputText = ``
+	const outputText = `5 20
+`
+	if _, err := os.Stat(testerBinary); err != nil {
+		t.Skipf("%s not found", testerBinary)
+	}
+	cmd := exec.Command(testerBinary)
+	cmd.Stdin = strings.NewReader(inputText)
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	messageCh := make(chan Message, 10)
+	instance, err := StartInstance(cmd, 5, 20, messageCh)
+	if err != nil {
+		t.Fatalf("error starting an instance with %s: %v", testerBinary, err)
+	}
+	if err := checkedWait(t, instance); err != nil {
+		t.Fatalf("error running an instance with %s: %v", testerBinary, err)
+	}
+	if got, want := stdout.String(), outputText; got != want {
+		t.Errorf("wrong output; got=\"%s\", want=\"%s\"", got, want)
+	}
+	// TODO: test message send and receive
+}
+
+// Stop receiving in the middle of a message
+func TestInstanceBrokenPipe(t *testing.T) {
+	hangerBinary := filepath.Join("zeus", "hanger")
+	if _, err := os.Stat(hangerBinary); err != nil {
+		t.Skipf("%s not found", hangerBinary)
+	}
+	cmd := exec.Command(hangerBinary)
+	instance, err := StartInstance(cmd, 0, 2, nil)
+	if err != nil {
+		t.Fatalf("error starting an instance with %s: %v", hangerBinary, err)
+	}
+	instance.PutMessage(Message{Source: 1, Target: 0, Message: []byte("abcdefghijlkmnopqrstuvwxyz")}) // this message will take >20 bytes on the wire
+	if err := checkedWait(t, instance); err != nil {
+		t.Fatalf("error running an instance with %s: %v", hangerBinary, err)
+	}
+}
