@@ -1,14 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"testing"
-	"time"
 	"path/filepath"
 	"strings"
-	"bytes"
+	"testing"
+	"time"
 )
 
 var catBinary string
