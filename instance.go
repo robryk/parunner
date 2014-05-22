@@ -44,7 +44,7 @@ func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages c
 	if err != nil {
 		return nil, err
 	}
-	cmd.ExtraFiles = []*os.File{respr, cmdw}
+	setupPipes(cmd, respr, cmdw)
 
 	if err := instance.cmd.Start(); err != nil {
 		return nil, err
