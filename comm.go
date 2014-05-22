@@ -47,9 +47,10 @@ const MessageCountLimit = 1000
 const MessageSizeLimit = 8 * 1024 * 1024
 
 type Message struct {
-	Source  int
-	Target  int
-	Message []byte
+	Source   int
+	Target   int
+	SendTime time.Duration
+	Message  []byte
 }
 
 func (i *Instance) PutMessage(message Message) {
@@ -190,6 +191,7 @@ func readRequest(r io.Reader) (*request, error) {
 }
 
 func (i *Instance) communicate(r io.Reader, w io.Writer) error {
+	timeOffset := time.Duration(0)
 	// TODO: Figure out what errors should be returned from this function. We currently error if the instance fails to read the header, for example.
 	if err := writeHeader(w, i.id, i.totalInstances); err != nil {
 		return err
@@ -202,6 +204,7 @@ func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 			}
 			return err
 		}
+		req.time += timeOffset
 		switch req.requestType {
 		case requestSend:
 			if *traceCommunications {
@@ -216,6 +219,9 @@ func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 			if *traceCommunications {
 				log.Printf("Instancja %d odebrała wiadomość od instancji %d.", i.id, message.Source)
 			}
+			if message.SendTime > req.time {
+				timeOffset += message.SendTime - req.time
+			}
 			if err := writeMessage(w, message); err != nil {
 				return err
 			}
@@ -226,6 +232,9 @@ func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 			message := i.receiveAnyMessage()
 			if *traceCommunications {
 				log.Printf("Instancja %d odebrała wiadomość od instancji %d.", i.id, message.Source)
+			}
+			if message.SendTime > req.time {
+				timeOffset += message.SendTime - req.time
 			}
 			if err := writeMessage(w, message); err != nil {
 				return err
