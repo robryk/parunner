@@ -95,82 +95,132 @@ func (i *Instance) receiveAnyMessage() Message {
 	}
 }
 
-func (i *Instance) communicate(r io.Reader, w io.Writer) error {
+func writeMessage(w io.Writer, message Message) error {
+	rr := recvResponse{
+		RecvResponseMagic: recvResponseMagic,
+		SourceID:          int32(message.Source),
+		Length:            int32(len(message.Message)),
+	}
+	if err := binary.Write(w, binary.LittleEndian, &rr); err != nil {
+		return err
+	}
+	if n, err := w.Write(message.Message); n < len(message.Message) {
+		if err == nil {
+			err = io.ErrShortWrite
+		}
+		return err
+	}
+	return nil
+}
+
+func writeHeader(w io.Writer, id int, instanceCount int) error {
 	h := header{
 		Magic:     magic,
-		NodeCount: int32(i.totalInstances),
-		NodeID:    int32(i.id),
+		NodeCount: int32(instanceCount),
+		NodeID:    int32(id),
 	}
-	if err := binary.Write(w, binary.LittleEndian, &h); err != nil {
+	return binary.Write(w, binary.LittleEndian, &h)
+}
+
+const (
+	requestSend = iota
+	requestRecv
+	requestRecvAny
+)
+
+type request struct {
+	requestType int
+
+	// for requestSend:
+	destination int
+	message []byte
+
+	// for requestRecv:
+	source int
+}
+
+func readRequest(r io.Reader) (*request, error) {
+	var opType [1]byte
+	if _, err := r.Read(opType[:]); err != nil {
+		return nil, err
+	}
+	switch opType[0] {
+	case sendOpType:
+		var sh sendHeader
+		if err := binary.Read(r, binary.LittleEndian, &sh); err != nil {
+			return nil, err
+		}
+		if sh.Length < 0 || sh.Length > MessageSizeLimit {
+			return nil, fmt.Errorf("invalid size of a message to be sent: %d", sh.Length)
+		}
+		if sh.TargetID < 0 || sh.TargetID >= MaxInstances {
+			return nil, fmt.Errorf("invalid target instance in a send request: %d", sh.TargetID)
+		}
+		message := make([]byte, sh.Length)
+		if _, err := io.ReadFull(r, message); err != nil {
+			return nil, err
+		}
+		return &request{requestType: requestSend, destination: int(sh.TargetID), message: message}, nil
+	case recvOpType:
+		var rh recvHeader
+		if err := binary.Read(r, binary.LittleEndian, &rh); err != nil {
+			return nil, err
+		}
+		if rh.SourceID < -1 || rh.SourceID >= 100 {
+			return nil, fmt.Errorf("invalid source instance in a receive request: %d", rh.SourceID)
+		}
+		if rh.SourceID == -1 {
+			return &request{requestType: requestRecvAny}, nil
+		} else {
+			return &request{requestType: requestRecv, source: int(rh.SourceID)}, nil
+		}
+	default:
+		return nil, fmt.Errorf("invalid operation type %x", opType[0])
+	}
+}
+
+func (i *Instance) communicate(r io.Reader, w io.Writer) error {
+	if err := writeHeader(w, i.id, i.totalInstances); err != nil {
 		return err
 	}
 	for {
-		var opType [1]byte
-		if _, err := r.Read(opType[:]); err != nil {
+		req, err := readRequest(r)
+		if err != nil {
 			if err == io.EOF {
 				return nil
 			}
 			return err
 		}
-		switch opType[0] {
-		case sendOpType:
-			var sh sendHeader
-			if err := binary.Read(r, binary.LittleEndian, &sh); err != nil {
-				return err
-			}
-			if sh.Length < 0 || sh.Length > MessageSizeLimit {
-				return fmt.Errorf("invalid size of a message to be sent: %d", sh.Length)
-			}
-			if sh.TargetID < 0 || sh.TargetID >= 100 {
-				return fmt.Errorf("invalid target instance in a send request: %d", sh.TargetID)
-			}
+		switch req.requestType {
+		case requestSend:
 			if *traceCommunications {
-				log.Printf("Instancja %d wysyła %d bajtów do instancji %d.", i.id, sh.Length, sh.TargetID)
+				log.Printf("Instancja %d wysyła %d bajtów do instancji %d.", i.id, len(req.message), req.destination)
 			}
-			message := make([]byte, sh.Length)
-			if _, err := io.ReadFull(r, message); err != nil {
-				return err
+			i.sendMessage(req.destination, req.message)
+		case requestRecv:
+			if *traceCommunications {
+				log.Printf("Instancja %d czeka na wiadomość od instancji %d.", i.id, req.source)
 			}
-			i.sendMessage(int(sh.TargetID), message)
-		case recvOpType:
-			var rh recvHeader
-			if err := binary.Read(r, binary.LittleEndian, &rh); err != nil {
-				return err
-			}
-			if rh.SourceID < -1 || rh.SourceID >= 100 {
-				return fmt.Errorf("invalid source instance in a receive request: %d", rh.SourceID)
-			}
-			var message Message
-			if rh.SourceID == -1 {
-				if *traceCommunications {
-					log.Printf("Instancja %d czeka na wiadomość od dowolnej innej instancji.", i.id)
-				}
-				message = i.receiveAnyMessage()
-			} else {
-				if *traceCommunications {
-					log.Printf("Instancja %d czeka na wiadomość od instancji %d.", i.id, rh.SourceID)
-				}
-				message = i.receiveMessage(int(rh.SourceID))
-			}
+			message := i.receiveMessage(int(req.source))
 			if *traceCommunications {
 				log.Printf("Instancja %d odebrała wiadomość od instancji %d.", i.id, message.Source)
 			}
-			rr := recvResponse{
-				RecvResponseMagic: recvResponseMagic,
-				SourceID:          int32(message.Source),
-				Length:            int32(len(message.Message)),
-			}
-			if err := binary.Write(w, binary.LittleEndian, &rr); err != nil {
+			if err := writeMessage(w, message); err != nil {
 				return err
 			}
-			if n, err := w.Write(message.Message); n < len(message.Message) {
-				if err == nil {
-					err = io.ErrShortWrite
-				}
+		case requestRecvAny:
+			if *traceCommunications {
+				log.Printf("Instancja %d czeka na wiadomość od dowolnej innej instancji.", i.id)
+			}
+			message := i.receiveAnyMessage()
+			if *traceCommunications {
+				log.Printf("Instancja %d odebrała wiadomość od instancji %d.", i.id, message.Source)
+			}
+			if err := writeMessage(w, message); err != nil {
 				return err
 			}
 		default:
-			return fmt.Errorf("invalid operation type %x", opType[0])
+			panic("invalid request type")
 		}
 	}
 }
