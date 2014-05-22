@@ -8,6 +8,10 @@ const char command[] = {
 	0xff,
 	0xff,
 	0xff,
+	0x01, // time = int32(1) little endian
+	0x00,
+	0x00,
+	0x00,
 };
 
 int main() {

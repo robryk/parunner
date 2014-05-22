@@ -1,6 +1,7 @@
 #include "zeus.h"
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
 
 #define MAX_MESSAGE_SIZE (8*1024*1024)
 #define MAGIC 1736434764
@@ -69,6 +70,7 @@ void ZEUS(Send)(ZEUS(NodeId) target, const char* message, int bytes) {
 	int i;
 	WriteByte(SEND);
 	WriteInt(target);
+	WriteInt(clock() * 1000 / CLOCKS_PER_SEC);
 	WriteInt(bytes);
 	for(i=0;i<bytes;i++)
 		WriteByte(message[i]);
@@ -81,6 +83,7 @@ ZEUS(MessageInfo) ZEUS(Receive)(ZEUS(NodeId) source, char* buffer, int buffer_si
 	int i;
 	WriteByte(RECV);
 	WriteInt(source);
+	WriteInt(clock() * 1000 / CLOCKS_PER_SEC);
 	fflush(cmdout);
 	if (ReadInt() != MAGIC + 1)
 		assert(0);

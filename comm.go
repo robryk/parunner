@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 )
 
 var traceCommunications = flag.Bool("trace_comm", false, "Wypisz na standardowe wyjście diagnostyczne informację o każdej wysłanej i odebranej wiadomości")
@@ -31,11 +32,13 @@ type recvResponse struct {
 type recvHeader struct {
 	// OpType byte
 	SourceID int32
+	Time     int32 // milliseconds
 }
 
 type sendHeader struct {
 	// OpType byte
 	TargetID int32
+	Time     int32 // milliseconds
 	Length   int32
 	// Message []byte
 }
@@ -126,14 +129,17 @@ const (
 	requestSend = iota
 	requestRecv
 	requestRecvAny
+	// requestNop
+	// requestQuit
 )
 
 type request struct {
 	requestType int
+	time        time.Duration
 
 	// for requestSend:
 	destination int
-	message []byte
+	message     []byte
 
 	// for requestRecv:
 	source int
@@ -160,26 +166,31 @@ func readRequest(r io.Reader) (*request, error) {
 		if _, err := io.ReadFull(r, message); err != nil {
 			return nil, err
 		}
-		return &request{requestType: requestSend, destination: int(sh.TargetID), message: message}, nil
+		return &request{
+			requestType: requestSend,
+			time:        time.Duration(sh.Time) * time.Millisecond,
+			destination: int(sh.TargetID),
+			message:     message}, nil
 	case recvOpType:
 		var rh recvHeader
 		if err := binary.Read(r, binary.LittleEndian, &rh); err != nil {
 			return nil, err
 		}
-		if rh.SourceID < -1 || rh.SourceID >= 100 {
+		if rh.SourceID < -1 || rh.SourceID >= MaxInstances {
 			return nil, fmt.Errorf("invalid source instance in a receive request: %d", rh.SourceID)
 		}
 		if rh.SourceID == -1 {
-			return &request{requestType: requestRecvAny}, nil
+			return &request{requestType: requestRecvAny, time: time.Duration(rh.Time) * time.Millisecond}, nil
 		} else {
-			return &request{requestType: requestRecv, source: int(rh.SourceID)}, nil
+			return &request{requestType: requestRecv, time: time.Duration(rh.Time) * time.Millisecond, source: int(rh.SourceID)}, nil
 		}
 	default:
-		return nil, fmt.Errorf("invalid operation type %x", opType[0])
+		return nil, fmt.Errorf("invalid operation type 0x%x", opType[0])
 	}
 }
 
 func (i *Instance) communicate(r io.Reader, w io.Writer) error {
+	// TODO: Figure out what errors should be returned from this function. We currently error if the instance fails to read the header, for example.
 	if err := writeHeader(w, i.id, i.totalInstances); err != nil {
 		return err
 	}
