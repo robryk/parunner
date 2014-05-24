@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// TODO: Make a longer test string and use more than one Write() to write it.
 var testString string
 
 func init() {

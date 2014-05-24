@@ -30,12 +30,11 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	messagesCh := make(chan Message, 1)
 	results := make(chan error, 1)
 	is := make([]*Instance, len(cmds))
 	for i, cmd := range cmds {
 		var err error
-		is[i], err = StartInstance(cmd, i, len(cmds), messagesCh)
+		is[i], err = StartInstance(cmd, i, len(cmds))
 		if err != nil {
 			is[i] = nil
 			select {
@@ -57,6 +56,15 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 			wg.Done()
 		}(i, is[i])
 	}
+	requestChans := make([]<-chan *request, len(is))
+	for i := range requestChans {
+		requestChans[i] = is[i].requestChan
+	}
+	responseChans := make([]chan<- *response, len(is))
+	for i := range responseChans {
+		responseChans[i] = is[i].responseChan
+	}
+	RouteMessages(requestChans, responseChans)
 	go func() {
 		wg.Wait()
 		select {
@@ -66,8 +74,6 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 	}()
 	for {
 		select {
-		case m := <-messagesCh:
-			is[m.Target].PutMessage(m)
 		case err := <-results:
 			return is, err
 		}

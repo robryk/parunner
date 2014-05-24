@@ -53,53 +53,10 @@ type Message struct {
 	Message  []byte
 }
 
-func (i *Instance) PutMessage(message Message) {
-	i.queues[message.Source].Put() <- message
-}
-
 var ErrMessageCount = fmt.Errorf("przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
 var ErrMessageSize = fmt.Errorf("przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
 
-func (i *Instance) sendMessage(targetID int, message []byte) error {
-	i.messagesSent++
-	if i.messagesSent > MessageCountLimit {
-		return ErrMessageCount
-	}
-	i.messageBytesSent += len(message)
-	if i.messageBytesSent > MessageSizeLimit {
-		return ErrMessageSize
-	}
-	i.outgoingMessages <- Message{Source: i.id, Target: targetID, Message: message}
-	return nil
-}
-
-func (i *Instance) receiveMessage(sourceID int) Message {
-	// TODO: This is ugly. Make it possible to shut down read-side of an MQ.
-	select {
-	case message := <-i.queues[sourceID].Get():
-		return message.(Message)
-	case <-i.waitDone:
-		return Message{} // we can return whatever here, it will get ignored
-	}
-}
-
-func (i *Instance) receiveAnyMessage() Message {
-	// TODO: This is ugly. Make it possible to shut down read-side of an MQ.
-	var mq *MessageQueue
-	select {
-	case mq = <-i.selector:
-	case <-i.waitDone:
-		return Message{} // we can return whatever here, it will get ignored
-	}
-	select {
-	case message := <-mq.Get():
-		return message.(Message)
-	case <-i.waitDone:
-		return Message{} // we can return whatever here, it will get ignored
-	}
-}
-
-func writeMessage(w io.Writer, message Message) error {
+func writeMessage(w io.Writer, message *Message) error {
 	rr := recvResponse{
 		RecvResponseMagic: recvResponseMagic,
 		SourceID:          int32(message.Source),
@@ -131,7 +88,6 @@ const (
 	requestRecv
 	requestRecvAny
 	// requestNop
-	// requestQuit
 )
 
 type request struct {
@@ -144,6 +100,34 @@ type request struct {
 
 	// for requestRecv:
 	source int
+}
+
+func (req request) Describe() string {
+	switch req.requestType {
+	case requestSend:
+		return fmt.Sprintf("wysłanie wiadomości (%d bajtów) do instancji %d", len(req.message), req.destination)
+	case requestRecv:
+		return fmt.Sprintf("odbieranie wiadomości od instancji %d", req.source)
+	case requestRecvAny:
+		return "odbieranie dowolnej wiadomości"
+	default:
+		return fmt.Sprintf("nieznane żądanie typu %d", req.requestType)
+	}
+}
+
+func (req request) hasResponse() bool {
+	switch req.requestType {
+	case requestRecv:
+		return true
+	case requestRecvAny:
+		return true
+	default:
+		return false
+	}
+}
+
+type response struct {
+	message *Message
 }
 
 func readRequest(r io.Reader) (*request, error) {
@@ -190,9 +174,10 @@ func readRequest(r io.Reader) (*request, error) {
 	}
 }
 
-func (i *Instance) communicate(r io.Reader, w io.Writer) error {
+func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, respCh <-chan *response) error {
+	defer close(reqCh)
 	timeOffset := time.Duration(0)
-	// TODO: Figure out what errors should be returned from this function. We currently error if the instance fails to read the header, for example.
+	// TODO: Figure out what errors should be returned from this function. We currently error if the instance fails to read the header (which is mitigated by delaying the closure of other ends of the pipes), for example.
 	if err := writeHeader(w, i.id, i.totalInstances); err != nil {
 		return err
 	}
@@ -205,42 +190,34 @@ func (i *Instance) communicate(r io.Reader, w io.Writer) error {
 			return err
 		}
 		req.time += timeOffset
-		switch req.requestType {
-		case requestSend:
+		if *traceCommunications {
+			log.Printf("W momencie %v instancja %d: %s", req.time, i.id, req.Describe())
+		}
+		if req.requestType == requestSend {
+			i.messagesSent++
+			if i.messagesSent > MessageCountLimit {
+				return ErrMessageCount
+			}
+			i.messageBytesSent += len(req.message)
+			if i.messageBytesSent > MessageSizeLimit {
+				return ErrMessageSize
+			}
+		}
+		reqCh <- req
+		if req.hasResponse() {
+			resp, ok := <-respCh
+			if !ok {
+				return fmt.Errorf("Received no response for a receive request")
+			}
 			if *traceCommunications {
-				log.Printf("Instancja %d wysyła %d bajtów do instancji %d.", i.id, len(req.message), req.destination)
+				log.Printf("W momencie %v instancja %d odebrała wiadomość od instancji %d.", resp.message.SendTime, i.id, resp.message.Source)
 			}
-			i.sendMessage(req.destination, req.message)
-		case requestRecv:
-			if *traceCommunications {
-				log.Printf("Instancja %d czeka na wiadomość od instancji %d.", i.id, req.source)
+			if resp.message.SendTime > req.time {
+				timeOffset += resp.message.SendTime - req.time
 			}
-			message := i.receiveMessage(int(req.source))
-			if *traceCommunications {
-				log.Printf("Instancja %d odebrała wiadomość od instancji %d.", i.id, message.Source)
-			}
-			if message.SendTime > req.time {
-				timeOffset += message.SendTime - req.time
-			}
-			if err := writeMessage(w, message); err != nil {
+			if err := writeMessage(w, resp.message); err != nil {
 				return err
 			}
-		case requestRecvAny:
-			if *traceCommunications {
-				log.Printf("Instancja %d czeka na wiadomość od dowolnej innej instancji.", i.id)
-			}
-			message := i.receiveAnyMessage()
-			if *traceCommunications {
-				log.Printf("Instancja %d odebrała wiadomość od instancji %d.", i.id, message.Source)
-			}
-			if message.SendTime > req.time {
-				timeOffset += message.SendTime - req.time
-			}
-			if err := writeMessage(w, message); err != nil {
-				return err
-			}
-		default:
-			panic("invalid request type")
 		}
 	}
 }

@@ -8,16 +8,15 @@ import (
 )
 
 type Instance struct {
-	id               int
-	totalInstances   int
-	outgoingMessages chan<- Message
-	cmd              *exec.Cmd
+	id             int
+	totalInstances int
+	cmd            *exec.Cmd
+
+	requestChan  chan *request
+	responseChan chan *response
 
 	messagesSent     int
 	messageBytesSent int
-
-	queues   []*MessageQueue
-	selector chan *MessageQueue
 
 	errOnce  sync.Once
 	err      error
@@ -25,16 +24,15 @@ type Instance struct {
 	commDone chan bool
 }
 
-func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages chan<- Message) (*Instance, error) {
+func StartInstance(cmd *exec.Cmd, id int, totalInstances int) (*Instance, error) {
 	instance := &Instance{
-		id:               id,
-		totalInstances:   totalInstances,
-		outgoingMessages: outgoingMessages,
-		cmd:              cmd,
-		queues:           make([]*MessageQueue, totalInstances),
-		selector:         make(chan *MessageQueue),
-		waitDone:         make(chan bool),
-		commDone:         make(chan bool),
+		id:             id,
+		totalInstances: totalInstances,
+		cmd:            cmd,
+		requestChan:    make(chan *request, 1),
+		responseChan:   make(chan *response, 1),
+		waitDone:       make(chan bool),
+		commDone:       make(chan bool),
 	}
 	cmdr, cmdw, err := os.Pipe()
 	if err != nil {
@@ -50,11 +48,8 @@ func StartInstance(cmd *exec.Cmd, id int, totalInstances int, outgoingMessages c
 		return nil, err
 	}
 
-	for i := range instance.queues {
-		instance.queues[i] = NewMessageQueue(instance.selector)
-	}
 	go func() {
-		if err := instance.communicate(cmdr, respw); err != nil {
+		if err := instance.communicate(cmdr, respw, instance.requestChan, instance.responseChan); err != nil {
 			instance.errOnce.Do(func() {
 				instance.err = err
 			})
@@ -91,11 +86,7 @@ func (i *Instance) Wait() error {
 
 func (i *Instance) ShutdownQueues() []Message {
 	buf := []Message(nil)
-	for _, q := range i.queues {
-		for _, m := range q.Shutdown() {
-			buf = append(buf, m.(Message))
-		}
-	}
+	// TODO
 	return buf
 }
 

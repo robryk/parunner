@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -37,9 +38,9 @@ func init() {
 }
 
 func startInstance(t *testing.T, cmd *exec.Cmd) *Instance {
-	instance, err := StartInstance(cmd, 0, 1, nil)
+	instance, err := StartInstance(cmd, 0, 1)
 	if err != nil {
-		t.Fatalf("Error starting an instance for %s: %v", cmd.Path, err)
+		t.Fatalf("error starting an instance for %s: %v", cmd.Path, err)
 	}
 	return instance
 }
@@ -58,34 +59,43 @@ func checkedWait(t *testing.T, instance *Instance) error {
 
 func TestInstanceSuccess(t *testing.T) {
 	if trueBinary == "" {
-		t.Skip("No /bin/true equivalent found")
+		t.Skip("no /bin/true equivalent found")
 	}
-	instance := startInstance(t, exec.Command(trueBinary))
+	instance, err := StartInstance(exec.Command(trueBinary), 0, 1)
+	if err != nil {
+		t.Fatalf("error starting an instance of %s: %v", trueBinary, err)
+	}
 	if err := checkedWait(t, instance); err != nil {
-		t.Fatalf("Error running %s: %v", trueBinary, err)
+		t.Fatalf("error running %s: %v", trueBinary, err)
 	}
 }
 
 func TestInstanceFailure(t *testing.T) {
 	if falseBinary == "" {
-		t.Skip("No /bin/false equivalent found")
+		t.Skip("no /bin/false equivalent found")
 	}
-	instance := startInstance(t, exec.Command(falseBinary))
+	instance, err := StartInstance(exec.Command(falseBinary), 0, 1)
+	if err != nil {
+		t.Fatalf("error starting an instance of %s: %v", falseBinary, err)
+	}
 	if err := checkedWait(t, instance); err == nil {
-		t.Fatalf("No error when running %s", falseBinary)
+		t.Fatalf("no error when running %s", falseBinary)
 	}
 }
 
 func TestInstanceKill(t *testing.T) {
 	if catBinary == "" {
-		t.Skip("No /bin/cat equivalent found")
+		t.Skip("no /bin/cat equivalent found")
 	}
 	cmd := exec.Command(catBinary)
 	if _, err := cmd.StdinPipe(); err != nil {
 		t.Fatalf("error in Cmd.StdinPipe: %v", err)
 	}
 	cmd.Stdout = ioutil.Discard
-	instance := startInstance(t, cmd)
+	instance, err := StartInstance(cmd, 0, 1)
+	if err != nil {
+		t.Fatalf("error starting an instance of %s: %v", falseBinary, err)
+	}
 	waitChan := make(chan error)
 	go func() {
 		waitChan <- checkedWait(t, instance)
@@ -98,34 +108,100 @@ func TestInstanceKill(t *testing.T) {
 	}
 	instance.Kill()
 	if err := <-waitChan; err != ErrKilled {
-		t.Errorf("A killed instance has finished with error %v, instead of %v", err, ErrKilled)
+		t.Errorf("a killed instance has finished with error %v, instead of %v", err, ErrKilled)
 	}
 }
 
 func TestInstanceComm(t *testing.T) {
 	testerBinary := filepath.Join("zeus", "tester")
-	const inputText = ``
-	const outputText = `5 20
-`
 	if _, err := os.Stat(testerBinary); err != nil {
 		t.Skipf("%s not found", testerBinary)
 	}
-	cmd := exec.Command(testerBinary)
-	cmd.Stdin = strings.NewReader(inputText)
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	messageCh := make(chan Message, 10)
-	instance, err := StartInstance(cmd, 5, 20, messageCh)
-	if err != nil {
-		t.Fatalf("error starting an instance with %s: %v", testerBinary, err)
+	type testcase struct {
+		name             string
+		input            string
+		expectedOutput   string
+		expectedRequests []*request // expectedRequests[].time is a lower bound on the actual time
+		responses        []*response
 	}
-	if err := checkedWait(t, instance); err != nil {
-		t.Fatalf("error running an instance with %s: %v", testerBinary, err)
+	singleCase := func(tc testcase) {
+		quit := make(chan bool)
+
+		cmd := exec.Command(testerBinary)
+		cmd.Stdin = strings.NewReader(tc.input)
+		var stdout bytes.Buffer
+		cmd.Stdout = &stdout
+		instance, err := StartInstance(cmd, 5, 20)
+		if err != nil {
+			t.Errorf("test %s: error starting an instance of %s: %v", tc.name, testerBinary, err)
+			return
+		}
+
+		go func() {
+			var prevTime time.Duration
+			var i int
+			for req := range instance.requestChan {
+				if req.time < prevTime {
+					t.Errorf("test %s: request %+v is earlier than %v, the time of the previous request", tc.name, req, prevTime)
+				}
+				if i < len(tc.expectedRequests) {
+					if req.time < tc.expectedRequests[i].time {
+						t.Errorf("test %s: request %+v has time %v, expected at least %v", tc.name, req, req.time, tc.expectedRequests[i].time)
+					}
+					realTime := req.time
+					req.time = tc.expectedRequests[i].time
+					if got, want := req, tc.expectedRequests[i]; !reflect.DeepEqual(got, want) {
+						got.time = realTime
+						t.Errorf("test %s: got request %+v, expected %+v", tc.name, got, want)
+					}
+				} else {
+					t.Errorf("test %s: got request number %d, expected %d total", i, len(tc.expectedRequests))
+				}
+				i++
+			}
+			if i < len(tc.expectedRequests) {
+				t.Errorf("test %s: got only %d requests, expected %d", i, len(tc.expectedRequests))
+			}
+			<-quit
+		}()
+		go func() {
+			for i, resp := range tc.responses {
+				select {
+				case instance.responseChan <- resp:
+				case <-quit:
+					t.Errorf("test %s: instance was done before receiving response number %d", tc.name, i)
+					return
+				}
+			}
+			<-quit
+		}()
+		defer func() {
+			quit <- true
+			quit <- true
+		}()
+
+		if err := checkedWait(t, instance); err != nil {
+			t.Fatalf("test %s: error running an instance of %s: %v", tc.name, testerBinary, err)
+			return
+		}
+		if got, want := stdout.String(), tc.expectedOutput; got != want {
+			t.Errorf("test %s: wrong output; got=%q, want=%q", tc.name, got, want)
+		}
 	}
-	if got, want := stdout.String(), outputText; got != want {
-		t.Errorf("wrong output; got=\"%s\", want=\"%s\"", got, want)
+	testcases := []testcase{
+		{"header", "", "5 20\n", []*request{}, []*response{}},
+		{"send", "Scfoobar\n", "5 20\n", []*request{&request{requestType: requestSend, destination: 2, message: []byte("foobar")}}, []*response{}},
+		{"recv", "Rd\n", "5 20\n3 6 foobaz\n", []*request{&request{requestType: requestRecv, source: 3}}, []*response{&response{&Message{Source: 3, Target: 5, Message: []byte("foobaz")}}}},
+		{"recvany", "R*\n", "5 20\n3 6 foobaz\n", []*request{&request{requestType: requestRecvAny}}, []*response{&response{&Message{Source: 3, Target: 5, Message: []byte("foobaz")}}}},
+		{"blockingTime", "R*\nScblah\n", "5 20\n3 6 foobaz\n", []*request{
+			&request{requestType: requestRecvAny},
+			&request{requestType: requestSend, time: time.Duration(1234), destination: 2, message: []byte("blah")},
+		}, []*response{&response{&Message{Source: 3, Target: 5, SendTime: time.Duration(1234), Message: []byte("foobaz")}}}},
 	}
-	// TODO: test message send and receive
+
+	for _, tc := range testcases {
+		singleCase(tc)
+	}
 }
 
 // Stop receiving in the middle of a message
@@ -135,12 +211,21 @@ func TestInstanceBrokenPipe(t *testing.T) {
 		t.Skipf("%s not found", hangerBinary)
 	}
 	cmd := exec.Command(hangerBinary)
-	instance, err := StartInstance(cmd, 0, 2, nil)
+	instance, err := StartInstance(cmd, 0, 2)
 	if err != nil {
-		t.Fatalf("error starting an instance with %s: %v", hangerBinary, err)
+		t.Fatalf("error starting an instance of %s: %v", hangerBinary, err)
 	}
-	instance.PutMessage(Message{Source: 1, Target: 0, Message: []byte("abcdefghijlkmnopqrstuvwxyz")}) // this message will take >20 bytes on the wire
+	go func() {
+		for _ = range instance.requestChan {
+		}
+	}()
+	instance.responseChan <- &response{&Message{
+		Source:   1,
+		Target:   0,
+		SendTime: time.Duration(0),
+		Message:  []byte("abcdefghijlkmnopqrstuvwxyz"), // this message will take >20 bytes on the wire
+	}}
 	if err := checkedWait(t, instance); err != nil {
-		t.Fatalf("error running an instance with %s: %v", hangerBinary, err)
+		t.Fatalf("error running an instance of %s: %v", hangerBinary, err)
 	}
 }
