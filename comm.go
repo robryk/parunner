@@ -203,8 +203,10 @@ func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, 
 				return ErrMessageSize
 			}
 		}
+		currentTime := req.time
+		hasResponse := req.hasResponse()
 		reqCh <- req
-		if req.hasResponse() {
+		if hasResponse {
 			resp, ok := <-respCh
 			if !ok {
 				return fmt.Errorf("Received no response for a receive request")
@@ -212,8 +214,8 @@ func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, 
 			if *traceCommunications {
 				log.Printf("W momencie %v instancja %d odebrała wiadomość od instancji %d.", resp.message.SendTime, i.id, resp.message.Source)
 			}
-			if resp.message.SendTime > req.time {
-				timeOffset += resp.message.SendTime - req.time
+			if resp.message.SendTime > currentTime {
+				timeOffset += resp.message.SendTime - currentTime
 			}
 			if err := writeMessage(w, resp.message); err != nil {
 				return err
