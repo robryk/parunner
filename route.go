@@ -122,17 +122,12 @@ func (qs *queueSet) handleRequest(req *requestAndId) (blocked bool) {
 // to requests that require them. It should be given two slices of equal size: requestChans[i] should
 // be the channel that provides the requests from instance i and responses to that instance will be delivered
 // to responseChans[i]. The function will return once all requests are processed and all input channels are closed,
-// or once an error occurs.
+// or once an error occurs. The function leaves output channels open.
 //
 // Prerequisites:
 // Each output channel must be buffered.
 // A request that requires a response must not be followed by another request until the response is read.
 func RouteMessages(requestChans []<-chan *request, responseChans []chan<- *response) error {
-	defer func() {
-		for _, output := range responseChans {
-			close(output)
-		}
-	}()
 	queueSets := make([]*queueSet, len(requestChans))
 	for i, output := range responseChans {
 		queueSets[i] = newQueueSet(output)

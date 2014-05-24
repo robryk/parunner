@@ -184,6 +184,7 @@ func TestInstanceComm(t *testing.T) {
 			t.Fatalf("test %s: error running an instance of %s: %v", tc.name, testerBinary, err)
 			return
 		}
+		close(instance.requestChan)
 		if got, want := stdout.String(), tc.expectedOutput; got != want {
 			t.Errorf("test %s: wrong output; got=%q, want=%q", tc.name, got, want)
 		}

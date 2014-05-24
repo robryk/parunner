@@ -24,8 +24,9 @@ func (ie InstanceError) Error() string {
 // * The instance slice is valid even if the error is non-nil
 // * All the commands have been started before RunInstances returns
 // * All the instanced have been waited on before RunInstances returns
-// * The error returned is an instance of InstanceError and contains
-//   the instance ID that caused the error.
+// * If the error encountered is associated with an instance,
+//   an instance of InstanceError is returned. That instance contains
+//   the instance ID of the instance that caused the error.
 func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -53,18 +54,34 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 				default:
 				}
 			}
+			close(instance.requestChan) // TODO: Make this more obvious
 			wg.Done()
 		}(i, is[i])
 	}
-	requestChans := make([]<-chan *request, len(is))
-	for i := range requestChans {
-		requestChans[i] = is[i].requestChan
-	}
-	responseChans := make([]chan<- *response, len(is))
-	for i := range responseChans {
-		responseChans[i] = is[i].responseChan
-	}
-	RouteMessages(requestChans, responseChans)
+	wg.Add(1)
+	go func() {
+		requestChans := make([]<-chan *request, len(is))
+		for i := range requestChans {
+			requestChans[i] = is[i].requestChan
+		}
+		responseChans := make([]chan<- *response, len(is))
+		for i := range responseChans {
+			responseChans[i] = is[i].responseChan
+		}
+		defer func() {
+			for _, ch := range responseChans {
+				close(ch)
+			}
+		}()
+		err := RouteMessages(requestChans, responseChans)
+		if err != nil {
+			select {
+			case results <- err:
+			default:
+			}
+		}
+		wg.Done()
+	}()
 	go func() {
 		wg.Wait()
 		select {
@@ -72,10 +89,5 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 		default:
 		}
 	}()
-	for {
-		select {
-		case err := <-results:
-			return is, err
-		}
-	}
+	return is, <-results
 }

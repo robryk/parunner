@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "zeus.h"
 
 int main() {
@@ -38,6 +39,11 @@ int main() {
 				{
 					int code = buf[1] - '0';
 					exit(code);
+				}
+				break;
+			case 'H':
+				{
+					pause();
 				}
 				break;
 			default:
