@@ -8,4 +8,4 @@ Single-machine runner for [distributed](http://potyczki.mimuw.edu.pl/l/zadania_r
 Usage
 -----
 
-Link your binary with [zeus/zeus_local.c](https://github.com/robryk/parunner/blob/master/zeus/zeus_local.c) instead of the MPI-based zeus_local and pass the path to parunner. Parunner will explain its usage when called with no arguments.
+Link your binary with [zeus/zeus_local.c](https://github.com/robryk/parunner/blob/master/zeus/zeus_local.c) instead of the MPI-based zeus_local and pass the path to parunner. Parunner will explain its usage when called with no arguments. A [parunner binary](https://drone.io/github.com/robryk/parunner/files) for linux-amd64 compiled from master is available for download.
