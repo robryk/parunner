@@ -8,4 +8,14 @@ Single-machine runner for [distributed](http://potyczki.mimuw.edu.pl/l/zadania_r
 Usage
 -----
 
-Link your binary with [zeus/zeus_local.c](https://github.com/robryk/parunner/blob/master/zeus/zeus_local.c) instead of the MPI-based zeus_local and pass the path to parunner. Parunner will explain its usage when called with no arguments. A [parunner binary](https://drone.io/github.com/robryk/parunner/files) for linux-amd64 compiled from master is available for download.
+In order to run a program that uses [raw zeus interface](https://github.com/robryk/parunner/blob/master/zeus/zeus.h), you need to link it with [zeus/zeus_local.c](https://github.com/robryk/parunner/blob/master/zeus/zeus_local.c) instead of any other implementation of zeus_local. You can then run the program as follows:
+
+    $ parunner -n=number_of_instances path/to/program
+
+There is an [example](https://github.com/robryk/parunner/blob/master/zeus/example.c) provided. In order to run it, you should:
+
+1. Compile it: `make -C zeus example`
+2. Obtain a binary of parunner. If you have a Go toolchain installed, you can compile it by doing `go install github.com/robryk/parunner`. There is also a compiled binary for [linux-amd64](https://drone.io/github.com/robryk/parunner/files/parunner) available.
+3. Run `parunner -n=5 -trace_comm -stdout=all zeus/example`
+
+For more information on parunner's usage invoke it with no arguments.
