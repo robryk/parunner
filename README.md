@@ -1,7 +1,7 @@
 parunner
 ========
 
-Single-machine runner for [distributed](http://potyczki.mimuw.edu.pl/l/zadania_rozproszone/) [Potyczki Algorytmiczne](http://potyczki.mimuw.edu.pl/) problems.
+Single-machine runner for [distributed](http://potyczki.mimuw.edu.pl/l/zadania_rozproszone/) [Potyczki Algorytmiczne](http://potyczki.mimuw.edu.pl/) problems ([a](https://sio2.mimuw.edu.pl/pa/c/pa-2014-1/p/mak/) [few](https://sio2.mimuw.edu.pl/pa/c/pa-2014-1/p/kol/) [examples](https://sio2.mimuw.edu.pl/pa/c/pa-2014-1/p/sek/)).
 
 [![Build Status](https://drone.io/github.com/robryk/parunner/status.png)](https://drone.io/github.com/robryk/parunner/latest) [![GoDoc](https://godoc.org/github.com/robryk/parunner?status.png)](https://godoc.org/github.com/robryk/parunner)
 
