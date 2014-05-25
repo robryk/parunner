@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 const MaxInstances = 100
@@ -165,4 +166,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Uwaga: Instancja %d nie odebrała %d wiadomości dla niej przeznaczonych przed swoim zakończeniem.\n", i, len(buf))
 		}
 	}
+	var maxTime time.Duration
+	var lastInstance int
+	for i, instance := range instances {
+		if instanceTime := instance.TimeRunning + instance.TimeBlocked; instanceTime >= maxTime {
+			maxTime = instanceTime
+			lastInstance = i
+		}
+	}
+	fmt.Fprintf(os.Stderr, "Czas trwania: %v (ostatnia działająca instancja: %d)\n", maxTime, lastInstance)
 }

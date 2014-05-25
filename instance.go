@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 type Instance struct {
@@ -15,8 +16,10 @@ type Instance struct {
 	RequestChan  chan *request
 	ResponseChan chan *response
 
-	messagesSent     int
-	messageBytesSent int
+	MessagesSent     int
+	MessageBytesSent int
+	TimeRunning      time.Duration
+	TimeBlocked      time.Duration
 
 	errOnce  sync.Once
 	err      error
@@ -58,6 +61,7 @@ func (instance *Instance) Start() error {
 		instance.errOnce.Do(func() {
 			instance.err = err
 		})
+		instance.TimeRunning = instance.Cmd.ProcessState.SystemTime() + instance.Cmd.ProcessState.UserTime()
 		// We are doing it this late in order to delay error reports from communicate that are
 		// a result of the pipes closing (broken pipe on write pipe, EOF on read pipe). We
 		// do want to ignore some of those errors (e.g. broken pipe at the very beginning, which

@@ -175,7 +175,8 @@ func readRequest(r io.Reader) (*request, error) {
 }
 
 func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, respCh <-chan *response) error {
-	timeOffset := time.Duration(0)
+	// TODO: Export this from the Instance
+	i.TimeBlocked = time.Duration(0)
 	// TODO: Figure out what errors should be returned from this function. We currently error if the instance fails to read the header (which is mitigated by delaying the closure of other ends of the pipes), for example.
 	if err := writeHeader(w, i.ID, i.TotalInstances); err != nil {
 		return err
@@ -188,17 +189,17 @@ func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, 
 			}
 			return err
 		}
-		req.time += timeOffset
+		req.time += i.TimeBlocked
 		if *traceCommunications {
 			log.Printf("W momencie %v instancja %d: %s", req.time, i.ID, req.Describe())
 		}
 		if req.requestType == requestSend {
-			i.messagesSent++
-			if i.messagesSent > MessageCountLimit {
+			i.MessagesSent++
+			if i.MessagesSent > MessageCountLimit {
 				return ErrMessageCount
 			}
-			i.messageBytesSent += len(req.message)
-			if i.messageBytesSent > MessageSizeLimit {
+			i.MessageBytesSent += len(req.message)
+			if i.MessageBytesSent > MessageSizeLimit {
 				return ErrMessageSize
 			}
 		}
@@ -214,7 +215,7 @@ func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, 
 				log.Printf("W momencie %v instancja %d odebrała wiadomość od instancji %d.", resp.message.SendTime, i.ID, resp.message.Source)
 			}
 			if resp.message.SendTime > currentTime {
-				timeOffset += resp.message.SendTime - currentTime
+				i.TimeBlocked += resp.message.SendTime - currentTime
 			}
 			if err := writeMessage(w, resp.message); err != nil {
 				return err
