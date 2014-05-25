@@ -15,7 +15,7 @@ In order to run a program that uses [raw zeus interface](https://github.com/robr
 There is an [example](https://github.com/robryk/parunner/blob/master/zeus/example.c) provided. In order to run it, you should:
 
 1. Compile it: `make -C zeus example`
-2. Obtain a binary of parunner. If you have a Go toolchain installed, you can compile it by doing `go build github.com/robryk/parunner`. There is also a compiled binary for [linux-amd64](https://drone.io/github.com/robryk/parunner/files/parunner) available.
+2. Obtain a binary of parunner. If you have a Go toolchain installed, you can compile it by doing `go get github.com/robryk/parunner`. The binary will then be built and written to `$GOPATH/bin/parunner`. There is also a compiled binary for [linux-amd64](https://drone.io/github.com/robryk/parunner/files/parunner) available.
 3. Run `parunner -n=3 -trace_comm -stdout=tagged zeus/example`. The output should look like this:
 ```
 robryk@sharya-rana ~/g/s/g/r/parunner> parunner -n=3 -trace_comm -stdout=tagged zeus/example
