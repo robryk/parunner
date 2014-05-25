@@ -119,11 +119,13 @@ func main() {
 			log.Fatal(err)
 		}
 		go func() {
-			// TODO: We care about errors from the reader, but not about broken pipes on the writer.
-			// We don't care about the exact instance that the error manifested on, because it's cannot
-			// be caused by the instance itself. We probably want to log.Fatal(err) on anything but a broken
-			// pipe.
-			io.Copy(w, stdinPipe.Reader())
+			// We don't care about errors from the writer (we expect broken pipe if the process has exited
+			// before reading all of its input), but we do care about errors when reading from the filepipe.
+			if _, err := io.Copy(WrapWriter(w), stdinPipe.Reader()); err != nil {
+				if _, ok := err.(WriterError); !ok {
+					log.Fatal(err)
+				}
+			}
 			w.Close()
 		}()
 		makeFromWrite := func(writeProc func(int, io.Reader) error, w io.Writer) io.Writer {
@@ -176,7 +178,7 @@ func main() {
 			lastInstance = i
 		}
 	}
-	fmt.Fprintf(os.Stderr, "Czas trwania: %v (ostatnia działająca instancja: %d)\n", maxTime, lastInstance)
+	fmt.Fprintf(os.Stderr, "Czas trwania: %v (najdłużej działająca instancja: %d)\n", maxTime, lastInstance)
 	if *stats {
 		w := tabwriter.NewWriter(os.Stderr, 2, 1, 1, ' ', 0)
 		io.WriteString(w, "Instancja\tCzas całkowity\tCzas CPU\tCzas oczekiwania\tWysłane wiadomości\tWysłane bajty\n")
