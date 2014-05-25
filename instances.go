@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os/exec"
 	"sync"
 )
@@ -27,7 +28,7 @@ func (ie InstanceError) Error() string {
 // * If the error encountered is associated with an instance,
 //   an instance of InstanceError is returned. That instance contains
 //   the instance ID of the instance that caused the error.
-func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
+func RunInstances(cmds []*exec.Cmd, commLog io.Writer) ([]*Instance, error) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
@@ -82,7 +83,7 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 				close(ch)
 			}
 		}()
-		err := RouteMessages(requestChans, responseChans)
+		err := RouteMessages(requestChans, responseChans, commLog)
 		if err != nil {
 			select {
 			case results <- err:

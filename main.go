@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -22,6 +23,7 @@ var stderrHandling = flag.String("stderr", "all", "Obsługa standardowe wyjścia
 var filesPrefix = flag.String("prefix", "", "Prefiks nazwy plików wyjściowych generowanych przez -stdout=files i -stderr=files")
 var warnRemaining = flag.Bool("warn_unreceived", true, "Ostrzegaj o wiadomościach, które pozostały nieodebrane po zakończeniu się instancji")
 var stats = flag.Bool("print_stats", false, "Na koniec wypisz statystyki dotyczące poszczególnych instancji")
+var traceCommunications = flag.Bool("trace_comm", false, "Wypisz na standardowe wyjście diagnostyczne informację o każdej wysłanej i odebranej wiadomości")
 
 var binaryPath string
 
@@ -58,6 +60,7 @@ func Usage() {
 }
 
 func main() {
+	log.SetFlags(log.Lmicroseconds | log.Lshortfile)
 	flag.Usage = Usage
 	flag.Parse()
 	if flag.NArg() != 1 {
@@ -161,7 +164,11 @@ func main() {
 		cmd.Stderr = makeFromWrite(writeStderr, os.Stderr)
 		progs[i] = cmd
 	}
-	instances, err := RunInstances(progs)
+	commLog := ioutil.Discard
+	if *traceCommunications {
+		commLog = os.Stderr
+	}
+	instances, err := RunInstances(progs, commLog)
 	for _, f := range closeAfterWait {
 		f.Close()
 	}

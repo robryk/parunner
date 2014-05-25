@@ -2,14 +2,10 @@ package main
 
 import (
 	"encoding/binary"
-	"flag"
 	"fmt"
 	"io"
-	"log"
 	"time"
 )
-
-var traceCommunications = flag.Bool("trace_comm", false, "Wypisz na standardowe wyjście diagnostyczne informację o każdej wysłanej i odebranej wiadomości")
 
 const magic = 1736434764
 const recvResponseMagic = magic + 1
@@ -102,19 +98,6 @@ type request struct {
 	source int
 }
 
-func (req request) Describe() string {
-	switch req.requestType {
-	case requestSend:
-		return fmt.Sprintf("wysłanie wiadomości (%d bajtów) do instancji %d", len(req.message), req.destination)
-	case requestRecv:
-		return fmt.Sprintf("odbieranie wiadomości od instancji %d", req.source)
-	case requestRecvAny:
-		return "odbieranie dowolnej wiadomości"
-	default:
-		return fmt.Sprintf("nieznane żądanie typu %d", req.requestType)
-	}
-}
-
 func (req request) hasResponse() bool {
 	switch req.requestType {
 	case requestRecv:
@@ -189,9 +172,6 @@ func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, 
 			return err
 		}
 		req.time += i.TimeBlocked
-		if *traceCommunications {
-			log.Printf("W momencie %v instancja %d: %s", req.time, i.ID, req.Describe())
-		}
 		if req.requestType == requestSend {
 			i.MessagesSent++
 			if i.MessagesSent > MessageCountLimit {
@@ -209,9 +189,6 @@ func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, 
 			resp, ok := <-respCh
 			if !ok {
 				return fmt.Errorf("Received no response for a receive request")
-			}
-			if *traceCommunications {
-				log.Printf("W momencie %v instancja %d odebrała wiadomość od instancji %d.", resp.message.SendTime, i.ID, resp.message.Source)
 			}
 			if resp.message.SendTime > currentTime {
 				i.TimeBlocked += resp.message.SendTime - currentTime

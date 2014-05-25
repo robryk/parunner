@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io/ioutil"
 	"sync"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func routeFakes(fis []*fakeInstance) error {
 		requestChans[i] = fi.requestChan
 		responseChans[i] = fi.responseChan
 	}
-	return RouteMessages(requestChans, responseChans)
+	return RouteMessages(requestChans, responseChans, ioutil.Discard)
 }
 
 // equivalentMessages returns true if the two messages are equal or differ in the SendTime only
