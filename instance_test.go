@@ -163,6 +163,7 @@ func TestInstanceComm(t *testing.T) {
 			<-quit
 		}()
 		go func() {
+			defer func() { <-quit }()
 			for i, resp := range tc.responses {
 				select {
 				case instance.ResponseChan <- resp:
@@ -174,6 +175,7 @@ func TestInstanceComm(t *testing.T) {
 			<-quit
 		}()
 		defer func() {
+			quit <- true
 			quit <- true
 			quit <- true
 		}()
