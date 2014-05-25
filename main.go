@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"text/tabwriter"
 	"time"
@@ -24,7 +26,11 @@ var stats = flag.Bool("print_stats", false, "Na koniec wypisz statystyki dotyczÄ
 var binaryPath string
 
 func writeFile(streamType string, i int, r io.Reader) error {
-	basename := binaryPath // XXX -- remove extension
+	binaryDir, binaryFile := filepath.Split(binaryPath)
+	if idx := strings.LastIndex(binaryFile, "."); idx != -1 {
+		binaryFile = binaryFile[:idx]
+	}
+	basename := filepath.Join(binaryDir, binaryFile)
 	if *filesPrefix != "" {
 		basename = *filesPrefix
 	}
