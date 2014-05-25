@@ -57,3 +57,5 @@ func (fi *fakeInstance) Recv() *Message {
 func (fi *fakeInstance) Close() {
 	close(fi.requestChan)
 }
+
+// TODO: tests
