@@ -64,13 +64,26 @@ ZEUS(NodeId) ZEUS(MyNodeId)() {
 	return node_id;
 }
 
+static int CurrentTime() {
+	static int warned;
+	int time = clock();
+	if (time == -1) {
+		if (!warned) {
+			warned = 1;
+			fprintf(stderr, "Warning: clock() returned -1; time measurements will be bogus.\n");
+		}
+		return 0;
+	}
+	return time * 1000 / CLOCKS_PER_SEC;
+}
+
 void ZEUS(Send)(ZEUS(NodeId) target, const char* message, int bytes) {
 	assert(target >= 0 && target < nof_nodes);
 	assert(bytes <= MAX_MESSAGE_SIZE);
 	int i;
 	WriteByte(SEND);
 	WriteInt(target);
-	WriteInt(clock() * 1000 / CLOCKS_PER_SEC);
+	WriteInt(CurrentTime());
 	WriteInt(bytes);
 	for(i=0;i<bytes;i++)
 		WriteByte(message[i]);
@@ -83,7 +96,7 @@ ZEUS(MessageInfo) ZEUS(Receive)(ZEUS(NodeId) source, char* buffer, int buffer_si
 	int i;
 	WriteByte(RECV);
 	WriteInt(source);
-	WriteInt(clock() * 1000 / CLOCKS_PER_SEC);
+	WriteInt(CurrentTime());
 	fflush(cmdout);
 	if (ReadInt() != MAGIC + 1)
 		assert(0);
