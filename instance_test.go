@@ -153,12 +153,12 @@ func TestInstanceComm(t *testing.T) {
 						t.Errorf("test %s: got request %+v, expected %+v", tc.name, got, want)
 					}
 				} else {
-					t.Errorf("test %s: got request number %d, expected %d total", i, len(tc.expectedRequests))
+					t.Errorf("test %s: got request number %d, expected %d total", tc.name, i, len(tc.expectedRequests))
 				}
 				i++
 			}
 			if i < len(tc.expectedRequests) {
-				t.Errorf("test %s: got only %d requests, expected %d", i, len(tc.expectedRequests))
+				t.Errorf("test %s: got only %d requests, expected %d", tc.name, i, len(tc.expectedRequests))
 			}
 			<-quit
 		}()
