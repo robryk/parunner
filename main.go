@@ -115,11 +115,14 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		// TODO: We care about errors from the reader, but not about broken pipes on the writer.
-		// We don't care about the exact instance that the error manifested on, because it's cannot
-		// be caused by the instance itself. We probably want to log.Fatal(err) on anything but a broken
-		// pipe.
-		go io.Copy(w, stdinPipe.Reader())
+		go func() {
+			// TODO: We care about errors from the reader, but not about broken pipes on the writer.
+			// We don't care about the exact instance that the error manifested on, because it's cannot
+			// be caused by the instance itself. We probably want to log.Fatal(err) on anything but a broken
+			// pipe.
+			io.Copy(w, stdinPipe.Reader())
+			w.Close()
+		}()
 		makeFromWrite := func(writeProc func(int, io.Reader) error, w io.Writer) io.Writer {
 			if writeProc == nil {
 				return w
