@@ -224,6 +224,7 @@ func TestInstanceBrokenPipe(t *testing.T) {
 		for _ = range instance.RequestChan {
 		}
 	}()
+	defer close(instance.RequestChan)
 	instance.ResponseChan <- &response{&Message{
 		Source:   1,
 		Target:   0,
