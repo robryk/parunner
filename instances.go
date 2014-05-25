@@ -35,11 +35,11 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 	is := make([]*Instance, len(cmds))
 	for i, cmd := range cmds {
 		is[i] = &Instance{
-			ID: i,
+			ID:             i,
 			TotalInstances: len(cmds),
-			Cmd: cmd,
-			RequestChan: make(chan *request, 1),
-			ResponseChan: make(chan *response, 1),
+			Cmd:            cmd,
+			RequestChan:    make(chan *request, 1),
+			ResponseChan:   make(chan *response, 1),
 		}
 		if err := is[i].Start(); err != nil {
 			is[i] = nil

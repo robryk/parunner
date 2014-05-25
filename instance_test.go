@@ -124,11 +124,11 @@ func TestInstanceComm(t *testing.T) {
 		var stdout bytes.Buffer
 		cmd.Stdout = &stdout
 		instance := &Instance{
-			ID: 5,
+			ID:             5,
 			TotalInstances: 20,
-			Cmd: cmd,
-			RequestChan: make(chan *request, 1),
-			ResponseChan: make(chan *response, 1),
+			Cmd:            cmd,
+			RequestChan:    make(chan *request, 1),
+			ResponseChan:   make(chan *response, 1),
 		}
 		if err := instance.Start(); err != nil {
 			t.Errorf("test %s: error starting an instance of %s: %v", tc.name, testerBinary, err)
@@ -211,11 +211,11 @@ func TestInstanceBrokenPipe(t *testing.T) {
 	}
 	cmd := exec.Command(hangerBinary)
 	instance := &Instance{
-		ID: 0,
+		ID:             0,
 		TotalInstances: 2,
-		Cmd: cmd,
-		RequestChan: make(chan *request, 1),
-		ResponseChan: make(chan *response, 1),
+		Cmd:            cmd,
+		RequestChan:    make(chan *request, 1),
+		ResponseChan:   make(chan *response, 1),
 	}
 	if err := instance.Start(); err != nil {
 		t.Fatalf("error starting an instance of %s: %v", hangerBinary, err)
