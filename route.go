@@ -1,7 +1,11 @@
 package main
 
+// An ErrDeadlock represents a situation in which all of the instances have either
+// finished or are waiting for a message.
 type ErrDeadlock struct {
+	// WaitingInstances lists the instances that are still alive and trying to receive a message.
 	WaitingInstances  []int
+	// RemainingMessages lists the pairs of instances that have unreceived messages between them.
 	RemainingMessages []struct{ From, To int }
 }
 
@@ -9,7 +13,11 @@ func (e ErrDeadlock) Error() string {
 	return "wszystkie niezakończone instancje są zablokowane"
 }
 
+// An ErrRemainingMessages represents a situation when some messages were left
+// in the queues (ie. weren't received) when all the instances have finished.
+// This situation should not be considered an error, but we should warn about it.
 type ErrRemainingMessages struct {
+	// RemainingMessages lists the pairs of instances that have unreceived messages between them.
 	RemainingMessages []struct{ From, To int }
 }
 
@@ -148,10 +156,10 @@ func RouteMessages(requestChans []<-chan *request, responseChans []chan<- *respo
 		}
 		return target, queueSets[target].handleRequest(req)
 	})
-	var remaining []struct{From, To int}
-	for i, qs :=range queueSets {
+	var remaining []struct{ From, To int }
+	for i, qs := range queueSets {
 		for j := range qs.queues {
-			remaining = append(remaining, struct{From, To int}{j, i})
+			remaining = append(remaining, struct{ From, To int }{j, i})
 		}
 	}
 	if len(blocked) > 0 {
