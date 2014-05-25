@@ -8,12 +8,12 @@ import (
 )
 
 type Instance struct {
-	id             int
-	totalInstances int
-	cmd            *exec.Cmd
+	ID             int
+	TotalInstances int
+	Cmd            *exec.Cmd
 
-	requestChan  chan *request
-	responseChan chan *response
+	RequestChan  chan *request
+	ResponseChan chan *response
 
 	messagesSent     int
 	messageBytesSent int
@@ -24,43 +24,37 @@ type Instance struct {
 	commDone chan bool
 }
 
-func StartInstance(cmd *exec.Cmd, id int, totalInstances int) (*Instance, error) {
-	instance := &Instance{
-		id:             id,
-		totalInstances: totalInstances,
-		cmd:            cmd,
-		requestChan:    make(chan *request, 1),
-		responseChan:   make(chan *response, 1),
-		waitDone:       make(chan bool),
-		commDone:       make(chan bool),
-	}
+func (instance *Instance) Start() error {
+	instance.waitDone = make(chan bool)
+	instance.commDone = make(chan bool)
+
 	cmdr, cmdw, err := os.Pipe()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	respr, respw, err := os.Pipe()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	setupPipes(cmd, respr, cmdw)
+	setupPipes(instance.Cmd, respr, cmdw)
 
-	if err := instance.cmd.Start(); err != nil {
-		return nil, err
+	if err := instance.Cmd.Start(); err != nil {
+		return err
 	}
 
 	go func() {
-		if err := instance.communicate(cmdr, respw, instance.requestChan, instance.responseChan); err != nil {
+		if err := instance.communicate(cmdr, respw, instance.RequestChan, instance.ResponseChan); err != nil {
 			instance.errOnce.Do(func() {
 				instance.err = err
 			})
-			instance.cmd.Process.Kill()
+			instance.Cmd.Process.Kill()
 		}
 		cmdr.Close()
 		respw.Close()
 		close(instance.commDone)
 	}()
 	go func() {
-		err := instance.cmd.Wait()
+		err := instance.Cmd.Wait()
 		instance.errOnce.Do(func() {
 			instance.err = err
 		})
@@ -75,7 +69,7 @@ func StartInstance(cmd *exec.Cmd, id int, totalInstances int) (*Instance, error)
 		cmdw.Close()
 		close(instance.waitDone)
 	}()
-	return instance, nil
+	return nil
 }
 
 func (i *Instance) Wait() error {
@@ -96,5 +90,5 @@ func (i *Instance) Kill() error {
 	i.errOnce.Do(func() {
 		i.err = ErrKilled
 	})
-	return i.cmd.Process.Kill()
+	return i.Cmd.Process.Kill()
 }

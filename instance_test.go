@@ -37,14 +37,6 @@ func init() {
 	}
 }
 
-func startInstance(t *testing.T, cmd *exec.Cmd) *Instance {
-	instance, err := StartInstance(cmd, 0, 1)
-	if err != nil {
-		t.Fatalf("error starting an instance for %s: %v", cmd.Path, err)
-	}
-	return instance
-}
-
 func checkedWait(t *testing.T, instance *Instance) error {
 	ch := make(chan error, 1)
 	go func() {
@@ -61,8 +53,8 @@ func TestInstanceSuccess(t *testing.T) {
 	if trueBinary == "" {
 		t.Skip("no /bin/true equivalent found")
 	}
-	instance, err := StartInstance(exec.Command(trueBinary), 0, 1)
-	if err != nil {
+	instance := &Instance{ID: 0, TotalInstances: 1, Cmd: exec.Command(trueBinary)}
+	if err := instance.Start(); err != nil {
 		t.Fatalf("error starting an instance of %s: %v", trueBinary, err)
 	}
 	if err := checkedWait(t, instance); err != nil {
@@ -74,8 +66,8 @@ func TestInstanceFailure(t *testing.T) {
 	if falseBinary == "" {
 		t.Skip("no /bin/false equivalent found")
 	}
-	instance, err := StartInstance(exec.Command(falseBinary), 0, 1)
-	if err != nil {
+	instance := &Instance{ID: 0, TotalInstances: 1, Cmd: exec.Command(falseBinary)}
+	if err := instance.Start(); err != nil {
 		t.Fatalf("error starting an instance of %s: %v", falseBinary, err)
 	}
 	if err := checkedWait(t, instance); err == nil {
@@ -92,8 +84,8 @@ func TestInstanceKill(t *testing.T) {
 		t.Fatalf("error in Cmd.StdinPipe: %v", err)
 	}
 	cmd.Stdout = ioutil.Discard
-	instance, err := StartInstance(cmd, 0, 1)
-	if err != nil {
+	instance := &Instance{ID: 0, TotalInstances: 1, Cmd: cmd}
+	if err := instance.Start(); err != nil {
 		t.Fatalf("error starting an instance of %s: %v", falseBinary, err)
 	}
 	waitChan := make(chan error)
@@ -131,8 +123,14 @@ func TestInstanceComm(t *testing.T) {
 		cmd.Stdin = strings.NewReader(tc.input)
 		var stdout bytes.Buffer
 		cmd.Stdout = &stdout
-		instance, err := StartInstance(cmd, 5, 20)
-		if err != nil {
+		instance := &Instance{
+			ID: 5,
+			TotalInstances: 20,
+			Cmd: cmd,
+			RequestChan: make(chan *request, 1),
+			ResponseChan: make(chan *response, 1),
+		}
+		if err := instance.Start(); err != nil {
 			t.Errorf("test %s: error starting an instance of %s: %v", tc.name, testerBinary, err)
 			return
 		}
@@ -140,7 +138,7 @@ func TestInstanceComm(t *testing.T) {
 		go func() {
 			var prevTime time.Duration
 			var i int
-			for req := range instance.requestChan {
+			for req := range instance.RequestChan {
 				if req.time < prevTime {
 					t.Errorf("test %s: request %+v is earlier than %v, the time of the previous request", tc.name, req, prevTime)
 				}
@@ -167,7 +165,7 @@ func TestInstanceComm(t *testing.T) {
 		go func() {
 			for i, resp := range tc.responses {
 				select {
-				case instance.responseChan <- resp:
+				case instance.ResponseChan <- resp:
 				case <-quit:
 					t.Errorf("test %s: instance was done before receiving response number %d", tc.name, i)
 					return
@@ -184,7 +182,7 @@ func TestInstanceComm(t *testing.T) {
 			t.Fatalf("test %s: error running an instance of %s: %v", tc.name, testerBinary, err)
 			return
 		}
-		close(instance.requestChan)
+		close(instance.RequestChan)
 		if got, want := stdout.String(), tc.expectedOutput; got != want {
 			t.Errorf("test %s: wrong output; got=%q, want=%q", tc.name, got, want)
 		}
@@ -212,15 +210,21 @@ func TestInstanceBrokenPipe(t *testing.T) {
 		t.Skipf("%s not found", hangerBinary)
 	}
 	cmd := exec.Command(hangerBinary)
-	instance, err := StartInstance(cmd, 0, 2)
-	if err != nil {
+	instance := &Instance{
+		ID: 0,
+		TotalInstances: 2,
+		Cmd: cmd,
+		RequestChan: make(chan *request, 1),
+		ResponseChan: make(chan *response, 1),
+	}
+	if err := instance.Start(); err != nil {
 		t.Fatalf("error starting an instance of %s: %v", hangerBinary, err)
 	}
 	go func() {
-		for _ = range instance.requestChan {
+		for _ = range instance.RequestChan {
 		}
 	}()
-	instance.responseChan <- &response{&Message{
+	instance.ResponseChan <- &response{&Message{
 		Source:   1,
 		Target:   0,
 		SendTime: time.Duration(0),

@@ -34,9 +34,14 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 	results := make(chan error, 1)
 	is := make([]*Instance, len(cmds))
 	for i, cmd := range cmds {
-		var err error
-		is[i], err = StartInstance(cmd, i, len(cmds))
-		if err != nil {
+		is[i] = &Instance{
+			ID: i,
+			TotalInstances: len(cmds),
+			Cmd: cmd,
+			RequestChan: make(chan *request, 1),
+			ResponseChan: make(chan *response, 1),
+		}
+		if err := is[i].Start(); err != nil {
 			is[i] = nil
 			select {
 			case results <- InstanceError{i, err}:
@@ -54,7 +59,11 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 				default:
 				}
 			}
-			close(instance.requestChan) // TODO: Make this more obvious
+			// The instance leaves the communication channels open. We close the RequestChan
+			// to signal the message router that this instance has finished. In case of an error,
+			// we need to do this after possibly storing the error, so that message router's error
+			// (e.g. ErrDeadlock due to the last nonblocked instance exising) doesn't override ours.
+			close(instance.RequestChan)
 			wg.Done()
 		}(i, is[i])
 	}
@@ -62,11 +71,11 @@ func RunInstances(cmds []*exec.Cmd) ([]*Instance, error) {
 	go func() {
 		requestChans := make([]<-chan *request, len(is))
 		for i := range requestChans {
-			requestChans[i] = is[i].requestChan
+			requestChans[i] = is[i].RequestChan
 		}
 		responseChans := make([]chan<- *response, len(is))
 		for i := range responseChans {
-			responseChans[i] = is[i].responseChan
+			responseChans[i] = is[i].ResponseChan
 		}
 		defer func() {
 			for _, ch := range responseChans {
