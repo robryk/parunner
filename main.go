@@ -64,10 +64,10 @@ func main() {
 		os.Exit(1)
 	}
 	var writeStdout func(int, io.Reader) error
+	contestStdout := &ContestStdout{Output: os.Stdout}
 	switch *stdoutHandling {
 	case "contest":
-		cs := ContestStdout{Output: os.Stdout}
-		writeStdout = cs.Write
+		// This is handled specially (without a pipe) below.
 	case "all":
 	case "tagged":
 		writeStdout = func(i int, r io.Reader) error { return TagStream(fmt.Sprintf("STDOUT %d: ", i), os.Stdout, r) }
@@ -130,12 +130,20 @@ func main() {
 			wg.Add(1)
 			go func() {
 				err := writeProc(i, pr)
-				pr.CloseWithError(err) // TODO: Shouldn't we kill the instance if err!=nil?
+				if err != nil {
+					// All the errors we can get are not caused by instances' invalid behaviour, but
+					// by system issues (can't create a file, broken pipe on real stdout/err, etc.)
+					log.Fatal(err)
+				}
 				wg.Done()
 			}()
 			return pw
 		}
-		cmd.Stdout = makeFromWrite(writeStdout, os.Stdout)
+		if *stdoutHandling == "contest" {
+			cmd.Stdout = contestStdout.NewWriter(i)
+		} else {
+			cmd.Stdout = makeFromWrite(writeStdout, os.Stdout)
+		}
 		cmd.Stderr = makeFromWrite(writeStderr, os.Stderr)
 		progs[i] = cmd
 	}

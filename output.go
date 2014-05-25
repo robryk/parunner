@@ -13,27 +13,24 @@ type ContestStdout struct {
 	chooseInstance sync.Once
 }
 
-func (cs *ContestStdout) Write(i int, r io.Reader) error {
-	var buf [1]byte
-	_, err := r.Read(buf[:])
-	if err != nil {
-		if err == io.EOF {
-			err = nil
-		}
-		return err
-	}
-	cs.chooseInstance.Do(func() {
-		cs.chosenInstance = i
+type contestStdoutWriter struct {
+	cs *ContestStdout
+	id int
+}
+
+func (w *contestStdoutWriter) Write(buf []byte) (int, error) {
+	w.cs.chooseInstance.Do(func() {
+		w.cs.chosenInstance = w.id
 	})
-	if cs.chosenInstance == i {
-		if _, err := cs.Output.Write(buf[:]); err != nil {
-			return err
-		}
-		_, err := io.Copy(cs.Output, r)
-		return err
+	if w.cs.chosenInstance == w.id {
+		return w.cs.Output.Write(buf)
 	} else {
-		return fmt.Errorf("instancja %d zaczęła już wypisywać wyjście", cs.chosenInstance)
+		return 0, fmt.Errorf("instancja %d zaczęła już wypisywać wyjście", w.cs.chosenInstance)
 	}
+}
+
+func (cs *ContestStdout) NewWriter(id int) io.Writer {
+	return &contestStdoutWriter{cs: cs, id: id}
 }
 
 func TagStream(tag string, w io.Writer, r io.Reader) error {
