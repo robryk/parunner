@@ -85,9 +85,9 @@ func (fpr *filePipeReader) Read(buf []byte) (int, error) {
 		for fpr.pos >= fpr.fp.size && !fpr.fp.closing {
 			fpr.fp.cond.Wait()
 		}
-		closing := fpr.pos >= fpr.fp.size && fpr.fp.closing // TODO: make a test for the bug that was here
+		eof := fpr.pos >= fpr.fp.size && fpr.fp.closing
 		fpr.fp.mu.Unlock()
-		if closing {
+		if eof {
 			return 0, io.EOF
 		}
 	}

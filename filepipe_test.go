@@ -8,38 +8,50 @@ import (
 	"testing"
 )
 
-// TODO: Make a longer test string and use more than one Write() to write it.
-var testString string
+// infiniteReader generates an infinite and deterministic stream of bytes
+type infiniteReader int
 
-func init() {
-	const text = "Mary had a little lamb"
-	const N = 100
-	var buf bytes.Buffer
-	for i := 0; i < N; i++ {
-		if _, err := buf.WriteString(text); err != nil {
-			panic(err)
-		}
+func (ir *infiniteReader) Read(buf []byte) (int, error) {
+	for i := range buf {
+		// We want the cycle to be long to detect wrong read offsets more surely.
+		buf[i] = byte(*ir ^ (*ir >> 8))
+		*ir++
 	}
-	testString = buf.String()
+	return len(buf), nil
 }
 
-func TestFileQueueSimple(t *testing.T) {
+func testReader() io.Reader {
+	const N = 100 * 1024 // more than 2*32k, so that io.Copy will do 3 reads from it
+	var ir infiniteReader
+	return io.LimitReader(&ir, N)
+}
+
+func expectEqual(t *testing.T, got, want []byte) {
+	if bytes.Equal(got, want) {
+		return
+	}
+	size := len(want)
+	if len(got) < size {
+		size = len(got)
+	}
+	for i := 0; i < size; i++ {
+		if want[i] != got[i] {
+			t.Errorf("value read differs from expected on byte %d: got=%d, want=%d", i, got[i], want[i])
+			return
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("value read is %d bytes long, where %d was expected", len(got), len(want))
+	}
+}
+
+func TestFilePipeSimple(t *testing.T) {
 	fp, err := NewFilePipe()
 	if err != nil {
 		t.Fatalf("Failed to create a filepipe: %v", err)
 	}
-	finished := make(chan struct{})
 	fpr := fp.Reader()
-	go func() {
-		buf, err := ioutil.ReadAll(fpr)
-		if err != nil {
-			t.Errorf("Failed to read from a filepipe reader: %v", err)
-		} else if string(buf) != testString {
-			t.Errorf("Read %v, expected %v", string(buf), testString)
-		}
-		finished <- struct{}{}
-	}()
-	_, err = fp.Write([]byte(testString))
+	_, err = io.Copy(fp, testReader())
 	if err != nil {
 		t.Errorf("Failed to write to a filepipe: %v", err)
 	}
@@ -47,10 +59,22 @@ func TestFileQueueSimple(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to close a filepipe: %v", err)
 	}
-	<-finished
+	got, err := ioutil.ReadAll(fpr)
+	if err != nil {
+		t.Fatalf("Failed to read from a filepipe reader: %v", err)
+	}
+	want, err := ioutil.ReadAll(testReader())
+	if err != nil {
+		t.Fatalf("error reading from a testReader: %v", err)
+	}
+	expectEqual(t, got, want)
 }
 
-func TestFileQueueConcurrentReaders(t *testing.T) {
+func TestFilePipeConcurrentReaders(t *testing.T) {
+	want, err := ioutil.ReadAll(testReader())
+	if err != nil {
+		t.Fatalf("error reading from a testReader: %v", err)
+	}
 	fp, err := NewFilePipe()
 	if err != nil {
 		t.Fatalf("Failed to create a filepipe: %v", err)
@@ -65,13 +89,11 @@ func TestFileQueueConcurrentReaders(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read from a filepipe reader: %v", err)
 			}
-			if string(buf) != testString {
-				t.Errorf("Read %v, expected %v", string(buf), testString)
-			}
-			wg.Add(-1)
+			expectEqual(t, buf, want)
+			wg.Done()
 		}(fpr)
 	}
-	_, err = fp.Write([]byte(testString))
+	_, err = io.Copy(fp, testReader())
 	if err != nil {
 		t.Errorf("Failed to write to a filepipe: %v", err)
 	}
