@@ -70,7 +70,7 @@ func TestFilePipeSimple(t *testing.T) {
 	expectEqual(t, got, want)
 }
 
-func TestFilePipeConcurrentReaders(t *testing.T) {
+func TestFilePipeConcurrent(t *testing.T) {
 	want, err := ioutil.ReadAll(testReader())
 	if err != nil {
 		t.Fatalf("error reading from a testReader: %v", err)
@@ -102,4 +102,40 @@ func TestFilePipeConcurrentReaders(t *testing.T) {
 		t.Errorf("Failed to close a filepipe: %v", err)
 	}
 	wg.Wait()
+}
+
+func TestFilePipeRelease(t *testing.T) {
+	fp, err := NewFilePipe()
+	if err != nil {
+		t.Fatalf("error creating a filepipe: %v", err)
+	}
+	fpr := fp.Reader()
+	err = fp.Release()
+	if err != nil {
+		t.Fatalf("error releasing a filepipe: %v", err)
+	}
+	var buf [10]byte
+	_, err = fpr.Read(buf[:])
+	if err == nil {
+		t.Errorf("no error when reading from a destroyed filepipe")
+	}
+	err = fp.Release()
+	if err != nil {
+		t.Fatalf("error releasing a filepipe for the second time: %v", err)
+	}
+}
+
+func TestFilePipeClose(t *testing.T) {
+	fp, err := NewFilePipe()
+	if err != nil {
+		t.Fatalf("error creating a filepipe: %v", err)
+	}
+	err = fp.Close()
+	if err != nil {
+		t.Fatalf("error closing a filepipe: %v", err)
+	}
+	_, err = fp.Write([]byte("foo"))
+	if err == nil {
+		t.Errorf("no error when writing to a closed filepipe")
+	}
 }
