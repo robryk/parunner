@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"text/tabwriter"
 	"time"
 )
 
@@ -18,6 +19,7 @@ var stdoutHandling = flag.String("stdout", "contest", "Obługa standardowego wyj
 var stderrHandling = flag.String("stderr", "all", "Obsługa standardowe wyjścia diagnostycznego: all, tagged, files")
 var filesPrefix = flag.String("prefix", "", "Prefiks nazwy plików wyjściowych generowanych przez -stdout=files i -stderr=files")
 var warnRemaining = flag.Bool("warn_unreceived", true, "Ostrzegaj o wiadomościach, które pozostały nieodebrane po zakończeniu się instancji")
+var stats = flag.Bool("print_stats", false, "Na koniec wypisz statystyki dotyczące poszczególnych instancji")
 
 var binaryPath string
 
@@ -175,4 +177,12 @@ func main() {
 		}
 	}
 	fmt.Fprintf(os.Stderr, "Czas trwania: %v (ostatnia działająca instancja: %d)\n", maxTime, lastInstance)
+	if *stats {
+		w := tabwriter.NewWriter(os.Stderr, 2, 1, 1, ' ', 0)
+		io.WriteString(w, "Instancja\tCzas całkowity\tCzas CPU\tCzas oczekiwania\tWysłane wiadomości\tWysłane bajty\n")
+		for i, instance := range instances {
+			fmt.Fprintf(w, "%d\t%v\t%v\t%v\t%d\t%d\n", i, instance.TimeRunning + instance.TimeBlocked, instance.TimeRunning, instance.TimeBlocked, instance.MessagesSent, instance.MessageBytesSent)
+		}
+		w.Flush()
+	}
 }
