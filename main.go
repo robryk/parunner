@@ -166,15 +166,26 @@ func main() {
 		f.Close()
 	}
 	wg.Wait()
+	if er, ok := err.(ErrRemainingMessages); ok {
+		if *warnRemaining {
+			m := make(map[int][]int)
+			for _, p := range er.RemainingMessages {
+				m[p.To] = append(m[p.To], p.From)
+			}
+			fmt.Fprintf(os.Stderr, "Uwaga: następujące instancje nie odebrały wszystkich wiadomości dla nich przeznaczonych nim się zakończyły:\n")
+			for dest, srcs := range m {
+				fmt.Fprintf(os.Stderr, "Instancja %d nie odebrała wiadomości od instancji: ", dest)
+				for _, src := range srcs {
+					fmt.Fprintf(os.Stderr, "%d ", src)
+				}
+				fmt.Fprintln(os.Stderr)
+			}
+		}
+		err = nil
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
-	}
-	for i, instance := range instances {
-		buf := instance.ShutdownQueues()
-		if *warnRemaining && len(buf) > 0 {
-			fmt.Fprintf(os.Stderr, "Uwaga: Instancja %d nie odebrała %d wiadomości dla niej przeznaczonych przed swoim zakończeniem.\n", i, len(buf))
-		}
 	}
 	var maxTime time.Duration
 	var lastInstance int
@@ -189,7 +200,7 @@ func main() {
 		w := tabwriter.NewWriter(os.Stderr, 2, 1, 1, ' ', 0)
 		io.WriteString(w, "Instancja\tCzas całkowity\tCzas CPU\tCzas oczekiwania\tWysłane wiadomości\tWysłane bajty\n")
 		for i, instance := range instances {
-			fmt.Fprintf(w, "%d\t%v\t%v\t%v\t%d\t%d\n", i, instance.TimeRunning + instance.TimeBlocked, instance.TimeRunning, instance.TimeBlocked, instance.MessagesSent, instance.MessageBytesSent)
+			fmt.Fprintf(w, "%d\t%v\t%v\t%v\t%d\t%d\n", i, instance.TimeRunning+instance.TimeBlocked, instance.TimeRunning, instance.TimeBlocked, instance.MessagesSent, instance.MessageBytesSent)
 		}
 		w.Flush()
 	}

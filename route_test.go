@@ -112,6 +112,7 @@ func TestRouterSimple(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		fakes[1].Send(0, []byte("barbaz"))
+		fakes[1].Recv()
 		fakes[1].Close()
 		wg.Done()
 	}()
@@ -121,3 +122,4 @@ func TestRouterSimple(t *testing.T) {
 
 // TODO: test the timestamp-ordering mechanism
 // TODO: test deadlock detection (check for false positives too)
+// TODO: test remaining messages detection

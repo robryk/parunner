@@ -16,6 +16,7 @@ type Instance struct {
 	RequestChan  chan *request
 	ResponseChan chan *response
 
+	// The following fields should not be accessed until the Instance is Waited for.
 	MessagesSent     int
 	MessageBytesSent int
 	TimeRunning      time.Duration
@@ -80,12 +81,6 @@ func (i *Instance) Wait() error {
 	<-i.waitDone
 	<-i.commDone
 	return i.err
-}
-
-func (i *Instance) ShutdownQueues() []Message {
-	buf := []Message(nil)
-	// TODO
-	return buf
 }
 
 var ErrKilled = errors.New("killed by an explicit request")

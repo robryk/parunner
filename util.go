@@ -45,7 +45,7 @@ func TagStream(tag string, w io.Writer, r io.Reader) error {
 
 type WriterError error
 
-type wrappedWriter struct{
+type wrappedWriter struct {
 	io.Writer
 }
 

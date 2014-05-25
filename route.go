@@ -1,11 +1,20 @@
 package main
 
 type ErrDeadlock struct {
-	WaitingInstances []int
+	WaitingInstances  []int
+	RemainingMessages []struct{ From, To int }
 }
 
 func (e ErrDeadlock) Error() string {
 	return "wszystkie niezakończone instancje są zablokowane"
+}
+
+type ErrRemainingMessages struct {
+	RemainingMessages []struct{ From, To int }
+}
+
+func (e ErrRemainingMessages) Error() string {
+	return "po zakończeniu działania pozostały nieodebrane wiadomości"
 }
 
 type requestAndId struct {
@@ -13,7 +22,7 @@ type requestAndId struct {
 	r  *request
 }
 
-func merge(inputs []<-chan *request, fn func(*requestAndId) (int, bool)) error {
+func merge(inputs []<-chan *request, fn func(*requestAndId) (int, bool)) (deadlocked []int) {
 	blocked := make([]bool, len(inputs))
 	lastInputs := make([]*request, len(inputs))
 	for {
@@ -41,10 +50,7 @@ func merge(inputs []<-chan *request, fn func(*requestAndId) (int, bool)) error {
 					blockedInstances = append(blockedInstances, i)
 				}
 			}
-			if blockedInstances != nil {
-				return ErrDeadlock{WaitingInstances: blockedInstances}
-			}
-			return nil
+			return blockedInstances
 		}
 		i, block := fn(&requestAndId{id: firstI, r: lastInputs[firstI]})
 		blocked[i] = block
@@ -132,7 +138,7 @@ func RouteMessages(requestChans []<-chan *request, responseChans []chan<- *respo
 	for i, output := range responseChans {
 		queueSets[i] = newQueueSet(output)
 	}
-	err := merge(requestChans, func(req *requestAndId) (int, bool) {
+	blocked := merge(requestChans, func(req *requestAndId) (int, bool) {
 		var target int
 		switch req.r.requestType {
 		case requestSend:
@@ -142,6 +148,17 @@ func RouteMessages(requestChans []<-chan *request, responseChans []chan<- *respo
 		}
 		return target, queueSets[target].handleRequest(req)
 	})
-	return err
-	// TODO: we want to return the remaining messages somehow
+	var remaining []struct{From, To int}
+	for i, qs :=range queueSets {
+		for j := range qs.queues {
+			remaining = append(remaining, struct{From, To int}{j, i})
+		}
+	}
+	if len(blocked) > 0 {
+		return ErrDeadlock{WaitingInstances: blocked, RemainingMessages: remaining}
+	}
+	if len(remaining) > 0 {
+		return ErrRemainingMessages{RemainingMessages: remaining}
+	}
+	return nil
 }
