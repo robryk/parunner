@@ -1,3 +1,4 @@
+// Copyright (c) 2014, Onufry Wojtaszczuk <onufryw@gmail.com>
 #ifndef RECRUITING_DISTRIBUTED_API_ZEUS_H_
 #define RECRUITING_DISTRIBUTED_API_ZEUS_H_
 
