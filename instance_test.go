@@ -37,6 +37,16 @@ func init() {
 	}
 }
 
+func testBinaryPath(name string) string {
+	if _, err := os.Stat(filepath.Join("zeus", name)); err == nil {
+		return filepath.Join("zeus", name)
+	}
+	if _, err := os.Stat(filepath.Join("zeus", name+".exe")); err == nil {
+		return filepath.Join("zeus", name+".exe")
+	}
+	return ""
+}
+
 func checkedWait(t *testing.T, instance *Instance) error {
 	ch := make(chan error, 1)
 	go func() {
@@ -105,9 +115,9 @@ func TestInstanceKill(t *testing.T) {
 }
 
 func TestInstanceComm(t *testing.T) {
-	testerBinary := filepath.Join("zeus", "tester")
-	if _, err := os.Stat(testerBinary); err != nil {
-		t.Skipf("%s not found", testerBinary)
+	testerBinary := testBinaryPath("tester")
+	if testerBinary == "" {
+		t.Skipf("tester not found")
 	}
 	type testcase struct {
 		name             string
@@ -207,9 +217,9 @@ func TestInstanceComm(t *testing.T) {
 
 // Stop receiving in the middle of a message
 func TestInstanceBrokenPipe(t *testing.T) {
-	hangerBinary := filepath.Join("zeus", "hanger")
-	if _, err := os.Stat(hangerBinary); err != nil {
-		t.Skipf("%s not found", hangerBinary)
+	hangerBinary := testBinaryPath("hanger")
+	if hangerBinary == "" {
+		t.Skipf("hanger not found")
 	}
 	cmd := exec.Command(hangerBinary)
 	instance := &Instance{

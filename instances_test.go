@@ -3,17 +3,15 @@ package main
 import (
 	"bytes"
 	"io/ioutil"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestInstances(t *testing.T) {
-	testerBinary := filepath.Join("zeus", "tester")
-	if _, err := os.Stat(testerBinary); err != nil {
-		t.Skipf("%s not found", testerBinary)
+	testerBinary := testBinaryPath("tester")
+	if testerBinary == "" {
+		t.Skipf("tester not found")
 	}
 	type testcase struct {
 		name             string
