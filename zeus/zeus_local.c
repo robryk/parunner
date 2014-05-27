@@ -32,7 +32,7 @@ static void WriteByte(unsigned char c) {
 	assert(fwrite(&c, 1, 1, cmdout) == 1);
 }
 
-static int WriteInt(int v) {
+static void WriteInt(int v) {
 	int i;
 	for(i=0;i<4;i++)
 		WriteByte((v >> (8 * i)) & 0xff);

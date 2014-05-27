@@ -1,3 +1,5 @@
+CFLAGS += -Wall -O2 -g
+
 all: example hanger tester 
 
 example: example.c zeus_local.c
