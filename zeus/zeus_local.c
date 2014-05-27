@@ -3,6 +3,12 @@
 #include <stdio.h>
 #include <time.h>
 
+#ifdef WIN32
+#include <io.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#endif
+
 #define MAX_MESSAGE_SIZE (8*1024*1024)
 #define MAGIC 1736434764
 #define SEND 3
@@ -38,12 +44,27 @@ static void WriteInt(int v) {
 		WriteByte((v >> (8 * i)) & 0xff);
 }
 
+#ifdef WIN32
+static int GetFd(int dir) {
+	const char* names[2] = { "ZSHANDLE_IN", "ZSHANDLE_OUT" };
+	char* handle_s = getenv(names[dir]);
+	if (handle_s == NULL)
+		return -1;
+	int handle = atoi(handle_s);
+	return _open_osfhandle(handle, dir == 0 ? _O_RDONLY : _O_APPEND);
+}
+#else
+static int GetFd(int dir) {
+	return 3 + dir;
+}
+#endif
+
 static void Init() {
 	if (initialized)
 		return;
-	cmdin = fdopen(3, "r");
+	cmdin = fdopen(GetFd(0), "r");
 	assert(cmdin != NULL);
-	cmdout = fdopen(4, "w");
+	cmdout = fdopen(GetFd(1), "w");
 	assert(cmdout != NULL);
 	if (ReadInt() != MAGIC)
 		assert(0);
@@ -64,6 +85,11 @@ ZEUS(NodeId) ZEUS(MyNodeId)() {
 	return node_id;
 }
 
+#ifdef WIN32
+static int CurrentTime() {
+	return 0;
+}
+#else
 static int CurrentTime() {
 	static int warned;
 	int time = clock();
@@ -76,6 +102,7 @@ static int CurrentTime() {
 	}
 	return time * 1000 / CLOCKS_PER_SEC;
 }
+#endif
 
 void ZEUS(Send)(ZEUS(NodeId) target, const char* message, int bytes) {
 	assert(target >= 0 && target < nof_nodes);

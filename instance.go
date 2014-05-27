@@ -40,9 +40,7 @@ func (instance *Instance) Start() error {
 	if err != nil {
 		return err
 	}
-	setupPipes(instance.Cmd, respr, cmdw)
-
-	if err := instance.Cmd.Start(); err != nil {
+	if err := startInstance(instance.Cmd, respr, cmdw); err != nil {
 		return err
 	}
 
