@@ -5,47 +5,11 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 )
-
-var catBinary string
-var trueBinary string
-var falseBinary string
-
-func init() {
-	for _, s := range []string{"/bin/true"} {
-		if _, err := os.Stat(s); err == nil {
-			trueBinary = s
-			break
-		}
-	}
-	for _, s := range []string{"/bin/false"} {
-		if _, err := os.Stat(s); err == nil {
-			falseBinary = s
-			break
-		}
-	}
-	for _, s := range []string{"/bin/cat"} {
-		if _, err := os.Stat(s); err == nil {
-			catBinary = s
-			break
-		}
-	}
-}
-
-func testBinaryPath(name string) string {
-	if _, err := os.Stat(filepath.Join("zeus", name)); err == nil {
-		return filepath.Join("zeus", name)
-	}
-	if _, err := os.Stat(filepath.Join("zeus", name+".exe")); err == nil {
-		return filepath.Join("zeus", name+".exe")
-	}
-	return ""
-}
 
 func checkedWait(t *testing.T, instance *Instance) error {
 	ch := make(chan error, 1)
@@ -60,43 +24,36 @@ func checkedWait(t *testing.T, instance *Instance) error {
 }
 
 func TestInstanceSuccess(t *testing.T) {
-	if trueBinary == "" {
-		t.Skip("no /bin/true equivalent found")
-	}
-	instance := &Instance{ID: 0, TotalInstances: 1, Cmd: exec.Command(trueBinary)}
+	instance := &Instance{ID: 0, TotalInstances: 1, Cmd: exec.Command(testerPath)}
 	if err := instance.Start(); err != nil {
-		t.Fatalf("error starting an instance of %s: %v", trueBinary, err)
+		t.Fatalf("error starting an instance of tester: %v", err)
 	}
 	if err := checkedWait(t, instance); err != nil {
-		t.Fatalf("error running %s: %v", trueBinary, err)
+		t.Fatalf("error running tester with empty stdin: %v", err)
 	}
 }
 
 func TestInstanceFailure(t *testing.T) {
-	if falseBinary == "" {
-		t.Skip("no /bin/false equivalent found")
-	}
-	instance := &Instance{ID: 0, TotalInstances: 1, Cmd: exec.Command(falseBinary)}
+	cmd := exec.Command(testerPath)
+	cmd.Stdin = strings.NewReader("Q 1\n")
+	instance := &Instance{ID: 0, TotalInstances: 1, Cmd: cmd}
 	if err := instance.Start(); err != nil {
-		t.Fatalf("error starting an instance of %s: %v", falseBinary, err)
+		t.Fatalf("error starting an instance of tester: %v", err)
 	}
 	if err := checkedWait(t, instance); err == nil {
-		t.Fatalf("no error when running %s", falseBinary)
+		t.Fatalf("no error when running tester with stdin Q 1")
 	}
 }
 
 func TestInstanceKill(t *testing.T) {
-	if catBinary == "" {
-		t.Skip("no /bin/cat equivalent found")
-	}
-	cmd := exec.Command(catBinary)
+	cmd := exec.Command(testerPath)
 	if _, err := cmd.StdinPipe(); err != nil {
 		t.Fatalf("error in Cmd.StdinPipe: %v", err)
 	}
 	cmd.Stdout = ioutil.Discard
 	instance := &Instance{ID: 0, TotalInstances: 1, Cmd: cmd}
 	if err := instance.Start(); err != nil {
-		t.Fatalf("error starting an instance of %s: %v", falseBinary, err)
+		t.Fatalf("error starting an instance of tester: %v", err)
 	}
 	waitChan := make(chan error)
 	go func() {
@@ -105,7 +62,7 @@ func TestInstanceKill(t *testing.T) {
 	// The instance shouldn't finish of its own accord
 	select {
 	case err := <-waitChan:
-		t.Fatalf("/bin/cat has finished prematurely, err=%v", err)
+		t.Fatalf("tester has finished prematurely, err=%v", err)
 	case <-time.After(100 * time.Millisecond):
 	}
 	instance.Kill()
@@ -115,9 +72,8 @@ func TestInstanceKill(t *testing.T) {
 }
 
 func TestInstanceComm(t *testing.T) {
-	testerBinary := testBinaryPath("tester")
-	if testerBinary == "" {
-		t.Skipf("tester not found")
+	if _, err := os.Stat(testerPath); err != nil {
+		t.Fatalf("can't find tester binary: %v", err)
 	}
 	type testcase struct {
 		name             string
@@ -129,7 +85,7 @@ func TestInstanceComm(t *testing.T) {
 	singleCase := func(tc testcase) {
 		quit := make(chan bool)
 
-		cmd := exec.Command(testerBinary)
+		cmd := exec.Command(testerPath)
 		cmd.Stdin = strings.NewReader(tc.input)
 		var stdout bytes.Buffer
 		cmd.Stdout = &stdout
@@ -141,7 +97,7 @@ func TestInstanceComm(t *testing.T) {
 			ResponseChan:   make(chan *response, 1),
 		}
 		if err := instance.Start(); err != nil {
-			t.Errorf("test %s: error starting an instance of %s: %v", tc.name, testerBinary, err)
+			t.Errorf("test %s: error starting an instance of tester: %v", tc.name, err)
 			return
 		}
 
@@ -191,7 +147,7 @@ func TestInstanceComm(t *testing.T) {
 		}()
 
 		if err := checkedWait(t, instance); err != nil {
-			t.Fatalf("test %s: error running an instance of %s: %v", tc.name, testerBinary, err)
+			t.Fatalf("test %s: error running an instance of tester: %v", tc.name, err)
 			return
 		}
 		close(instance.RequestChan)
@@ -217,11 +173,7 @@ func TestInstanceComm(t *testing.T) {
 
 // Stop receiving in the middle of a message
 func TestInstanceBrokenPipe(t *testing.T) {
-	hangerBinary := testBinaryPath("hanger")
-	if hangerBinary == "" {
-		t.Skipf("hanger not found")
-	}
-	cmd := exec.Command(hangerBinary)
+	cmd := exec.Command(hangerPath)
 	instance := &Instance{
 		ID:             0,
 		TotalInstances: 2,
@@ -230,7 +182,7 @@ func TestInstanceBrokenPipe(t *testing.T) {
 		ResponseChan:   make(chan *response, 1),
 	}
 	if err := instance.Start(); err != nil {
-		t.Fatalf("error starting an instance of %s: %v", hangerBinary, err)
+		t.Fatalf("error starting an instance of hanger: %v", err)
 	}
 	go func() {
 		for _ = range instance.RequestChan {
@@ -244,6 +196,6 @@ func TestInstanceBrokenPipe(t *testing.T) {
 		Message:  []byte("abcdefghijlkmnopqrstuvwxyz"), // this message will take >20 bytes on the wire
 	}}
 	if err := checkedWait(t, instance); err != nil {
-		t.Fatalf("error running an instance of %s: %v", hangerBinary, err)
+		t.Fatalf("error running an instance of hanger: %v", err)
 	}
 }

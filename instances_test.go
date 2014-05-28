@@ -3,15 +3,15 @@ package main
 import (
 	"bytes"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
 )
 
 func TestInstances(t *testing.T) {
-	testerBinary := testBinaryPath("tester")
-	if testerBinary == "" {
-		t.Skipf("tester not found")
+	if _, err := os.Stat(testerPath); err != nil {
+		t.Fatalf("can't find tester binary: %v", err)
 	}
 	type testcase struct {
 		name             string
@@ -34,7 +34,7 @@ func TestInstances(t *testing.T) {
 		outputs := make([]bytes.Buffer, len(tc.inputs))
 		cmds := make([]*exec.Cmd, len(tc.inputs))
 		for i, input := range tc.inputs {
-			cmds[i] = exec.Command(testerBinary)
+			cmds[i] = exec.Command(testerPath)
 			cmds[i].Stdin = strings.NewReader(input)
 			cmds[i].Stdout = &outputs[i]
 		}
