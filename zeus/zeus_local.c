@@ -4,6 +4,7 @@
 #include <time.h>
 
 #ifdef WIN32
+#include <windows.h>
 #include <io.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -86,8 +87,17 @@ ZEUS(NodeId) ZEUS(MyNodeId)() {
 }
 
 #ifdef WIN32
+
 static int CurrentTime() {
-	return 0;
+	HANDLE me = GetCurrentProcess();
+	FILETIME lpCreationTime, lpExitTime, lpKernelTime, lpUserTime;
+	GetProcessTimes(me, &lpCreationTime, &lpExitTime, &lpKernelTime, &lpUserTime);
+	ULONGLONG cTime = 
+		lpUserTime.dwLowDateTime +
+		lpKernelTime.dwLowDateTime +
+		(((ULONGLONG) lpUserTime.dwHighDateTime) << 32) +
+		(((ULONGLONG) lpKernelTime.dwHighDateTime) << 32);
+	return (int)(cTime / 10000);
 }
 #else
 static int CurrentTime() {
