@@ -1,6 +1,9 @@
 // A binary that terminates in the middle of receiving a message
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <io.h>
+#include <fcntl.h>
 
 const char command[] = {
 	0x04, // receive

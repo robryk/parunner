@@ -48,7 +48,7 @@ int main() {
 			case 'H':
 				{
 #ifdef WIN32
-					Sleep(1000000);
+					Sleep(100000);
 #else
 					pause();
 #endif
