@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef WIN32
+#include "windows.h"
+#endif
 #include "zeus.h"
 
 int main() {
@@ -43,7 +46,11 @@ int main() {
 				break;
 			case 'H':
 				{
+#ifdef WIN32
+					Sleep(100000);
+#else
 					pause();
+#endif
 				}
 				break;
 			default:
