@@ -1,3 +1,7 @@
+#ifdef WIN32
+	#include "windows.h"
+#endif
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +47,11 @@ int main() {
 				break;
 			case 'H':
 				{
+#ifdef WIN32
+					Sleep(1000000);
+#else
 					pause();
+#endif
 				}
 				break;
 			default:
