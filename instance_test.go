@@ -83,8 +83,6 @@ func TestInstanceComm(t *testing.T) {
 		responses        []*response
 	}
 	singleCase := func(tc testcase) {
-		quit := make(chan bool)
-
 		cmd := exec.Command(testerPath)
 		cmd.Stdin = strings.NewReader(tc.input)
 		var stdout bytes.Buffer
@@ -100,7 +98,9 @@ func TestInstanceComm(t *testing.T) {
 			t.Errorf("test %s: error starting an instance of tester: %v", tc.name, err)
 			return
 		}
+		quit := make(chan bool)
 
+		lastReqTime := make(chan time.Duration, 1)
 		go func() {
 			var prevTime time.Duration
 			var i int
@@ -126,8 +126,10 @@ func TestInstanceComm(t *testing.T) {
 			if i < len(tc.expectedRequests) {
 				t.Errorf("test %s: got only %d requests, expected %d", tc.name, i, len(tc.expectedRequests))
 			}
+			lastReqTime <- prevTime
 			<-quit
 		}()
+
 		go func() {
 			defer func() { <-quit }()
 			for i, resp := range tc.responses {
@@ -148,15 +150,20 @@ func TestInstanceComm(t *testing.T) {
 
 		if err := checkedWait(t, instance); err != nil {
 			t.Fatalf("test %s: error running an instance of tester: %v", tc.name, err)
+			close(instance.RequestChan)
 			return
 		}
 		close(instance.RequestChan)
 		if got, want := strings.Replace(stdout.String(), "\r\n", "\n", -1), tc.expectedOutput; got != want {
 			t.Errorf("test %s: wrong output; got=%q, want=%q", tc.name, got, want)
 		}
+		if rt := <-lastReqTime; instance.TimeRunning < rt {
+			t.Errorf("test %s: instance's last request happened at %v, but instance used only %v CPU time total", rt, instance.TimeRunning)
+		}
 	}
 	testcases := []testcase{
 		{"header", "", "5 20\n", []*request{}, []*response{}},
+		{"send after cpuburn", "C\nScfoobar\n", "5 20\n", []*request{&request{requestType: requestSend, destination: 2, message: []byte("foobar")}}, []*response{}},
 		{"send", "Scfoobar\n", "5 20\n", []*request{&request{requestType: requestSend, destination: 2, message: []byte("foobar")}}, []*response{}},
 		{"recv", "Rd\n", "5 20\n3 6 foobaz\n", []*request{&request{requestType: requestRecv, source: 3}}, []*response{&response{&Message{Source: 3, Target: 5, Message: []byte("foobaz")}}}},
 		{"recvany", "R*\n", "5 20\n3 6 foobaz\n", []*request{&request{requestType: requestRecvAny}}, []*response{&response{&Message{Source: 3, Target: 5, Message: []byte("foobaz")}}}},

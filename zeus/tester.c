@@ -44,6 +44,13 @@ int main() {
 					exit(code);
 				}
 				break;
+			case 'C':
+				{
+					volatile int x = 0;
+					for(x=0;x<(1<<25);x++) {
+					}
+				}
+				break;
 			case 'H':
 				{
 #ifdef WIN32
