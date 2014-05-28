@@ -1,4 +1,4 @@
-// A binary that hangs in the middle of receiving a message
+// A binary that terminates in the middle of receiving a message
 #include <assert.h>
 #include <stdio.h>
 
@@ -14,11 +14,27 @@ const char command[] = {
 	0x00,
 };
 
+#ifdef WIN32
+static int GetFd(int dir) {
+	const char* names[2] = { "ZSHANDLE_IN", "ZSHANDLE_OUT" };
+	char* handle_s = getenv(names[dir]);
+	if (handle_s == NULL)
+		return -1;
+	int handle = atoi(handle_s);
+	return _open_osfhandle(handle, dir == 0 ? _O_RDONLY : _O_APPEND);
+}
+#else
+static int GetFd(int dir) {
+	return 3 + dir;
+}
+#endif
+
+
 int main() {
 	char buf[20];
-	FILE* cmdin = fdopen(3, "r");
+	FILE* cmdin = fdopen(GetFd(0), "r");
 	assert(cmdin);
-	FILE* cmdout = fdopen(4, "w");
+	FILE* cmdout = fdopen(GetFd(1), "w");
 	assert(cmdout);
 	assert(fwrite(command, sizeof(command), 1, cmdout) == 1);
 	assert(fflush(cmdout) == 0);
