@@ -68,8 +68,8 @@ func TestInstances(t *testing.T) {
 			continue
 		}
 		for i, want := range tc.expectedOutputs {
-			got := outputs[i].String()
-			if strings.Replace(got, "\r\n", "\n", -1) != want {
+			got := strings.Replace(outputs[i].String(), "\r\n", "\n", -1)
+			if got != want {
 				t.Errorf("test %s: wrong output from instance %d: got=%q, want=%q", tc.name, i, got, want)
 			}
 		}

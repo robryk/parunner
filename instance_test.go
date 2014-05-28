@@ -151,7 +151,7 @@ func TestInstanceComm(t *testing.T) {
 			return
 		}
 		close(instance.RequestChan)
-		if got, want := stdout.String(), tc.expectedOutput; strings.Replace(got, "\r\n", "\n", -1) != want {
+		if got, want := strings.Replace(stdout.String(), "\r\n", "\n", -1), tc.expectedOutput; got != want {
 			t.Errorf("test %s: wrong output; got=%q, want=%q", tc.name, got, want)
 		}
 	}
