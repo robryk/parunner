@@ -158,7 +158,7 @@ func TestInstanceComm(t *testing.T) {
 			t.Errorf("test %s: wrong output; got=%q, want=%q", tc.name, got, want)
 		}
 		if rt := <-lastReqTime; instance.TimeRunning < rt {
-			t.Errorf("test %s: instance's last request happened at %v, but instance used only %v CPU time total", rt, instance.TimeRunning)
+			t.Errorf("test %s: instance's last request happened at %v, but instance used only %v CPU time total", tc.name, rt, instance.TimeRunning)
 		}
 	}
 	testcases := []testcase{
