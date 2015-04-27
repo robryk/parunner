@@ -43,11 +43,11 @@ func RunInstances(cmds []*exec.Cmd, commLog io.Writer) ([]*Instance, error) {
 			ResponseChan:   make(chan *response, 1),
 		}
 		if err := is[i].Start(); err != nil {
-			is[i] = nil
 			select {
 			case results <- InstanceError{i, err}:
 			default:
 			}
+			close(is[i].RequestChan)
 			continue
 		}
 		defer is[i].Kill()

@@ -76,5 +76,13 @@ func TestInstances(t *testing.T) {
 	}
 }
 
+func TestInstancesStartError(t *testing.T) {
+	cmds := []*exec.Cmd{exec.Command("/does/not/exist")}
+	_, err := RunInstances(cmds, ioutil.Discard)
+	if err == nil {
+		t.Errorf("expected an error when trying to run a nonexistent binary")
+	}
+}
+
 // TODO: check what happens when we send/recv message to/from an instance that doesn't exist
 // TODO: check what happens when an instance claims that its CPU time goes backward
