@@ -14,7 +14,7 @@ type InstanceError struct {
 }
 
 func (ie InstanceError) Error() string {
-	return fmt.Sprintf("Błąd instancji %d: %v", ie.ID, ie.Err)
+	return fmt.Sprintf("Error of instance %d: %v", ie.ID, ie.Err)
 }
 
 // RunInstances starts each command from cmds in an Instance and

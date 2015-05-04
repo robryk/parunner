@@ -57,7 +57,7 @@ type ErrMessageCount struct {
 }
 
 func (err ErrMessageCount) Error() string {
-	return fmt.Sprintf("przekroczony limit (%d) liczby wysłanych wiadomości", *messageCountLimit)
+	return fmt.Sprintf("sent message count limit (%d) exceeded", *messageCountLimit)
 }
 
 // ErrMessageSize is returned when an instance exceeds the per-instance total messages size limit.
@@ -66,7 +66,7 @@ type ErrMessageSize struct {
 }
 
 func (err ErrMessageSize) Error() string {
-	return fmt.Sprintf("przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", *messageSizeLimit)
+	return fmt.Sprintf("total sent message size limit (%d bytes) exceeded", *messageSizeLimit)
 }
 
 func writeMessage(w io.Writer, message *Message) error {

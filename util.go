@@ -25,7 +25,7 @@ func (w *contestStdoutWriter) Write(buf []byte) (int, error) {
 	if w.cs.chosenInstance == w.id {
 		return w.cs.Output.Write(buf)
 	} else {
-		return 0, fmt.Errorf("instancja %d zaczęła już wypisywać wyjście", w.cs.chosenInstance)
+		return 0, fmt.Errorf("instance %d has already started to write output", w.cs.chosenInstance)
 	}
 }
 

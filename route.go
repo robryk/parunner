@@ -16,7 +16,7 @@ type ErrDeadlock struct {
 }
 
 func (e ErrDeadlock) Error() string {
-	return "wszystkie niezakończone instancje są zablokowane"
+	return "all instances have either terminated or are deadlocked"
 }
 
 // An ErrRemainingMessages represents a situation when some messages were left
@@ -28,7 +28,7 @@ type ErrRemainingMessages struct {
 }
 
 func (e ErrRemainingMessages) Error() string {
-	return "po zakończeniu działania pozostały nieodebrane wiadomości"
+	return "some messages were left unreceived after all instances have terminated"
 }
 
 // requestAndID represents a request r made by instance id
