@@ -63,18 +63,25 @@ func main() {
 	log.SetFlags(log.Lmicroseconds | log.Lshortfile)
 	flag.Usage = Usage
 	flag.Parse()
+
 	if flag.NArg() != 1 {
 		fmt.Fprintf(os.Stderr, "Nie podałeś programu do uruchomienia\n")
 		flag.Usage()
 		os.Exit(1)
 	}
-	binaryPath = flag.Arg(0)
+	var err error
+	binaryPath, err = filepath.Abs(flag.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot find absolute path of the binary: %v\n", err)
+		os.Exit(1)
+	}
 
 	if *nInstances < 1 || *nInstances > MaxInstances {
 		fmt.Fprintf(os.Stderr, "Liczba instancji powinna być z zakresu [1,%d], a podałeś %d\n", MaxInstances, *nInstances)
 		flag.Usage()
 		os.Exit(1)
 	}
+
 	var writeStdout func(int, io.Reader) error
 	contestStdout := &ContestStdout{Output: os.Stdout}
 	switch *stdoutHandling {
@@ -122,7 +129,7 @@ func main() {
 	var wg sync.WaitGroup
 	closeAfterWait := []io.Closer{}
 	for i := range progs {
-		cmd := exec.Command(flag.Arg(0))
+		cmd := exec.Command(binaryPath)
 		w, err := cmd.StdinPipe()
 		if err != nil {
 			log.Fatal(err)
