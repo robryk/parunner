@@ -49,8 +49,19 @@ type Message struct {
 	Message  []byte
 }
 
-var ErrMessageCount = fmt.Errorf("przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
-var ErrMessageSize = fmt.Errorf("przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
+type ErrMessageCount struct {
+}
+
+func (err ErrMessageCount) Error() string {
+	return fmt.Sprintf("przekroczony limit (%d) liczby wysłanych wiadomości", MessageCountLimit)
+}
+
+type ErrMessageSize struct {
+}
+
+func (err ErrMessageSize) Error() string {
+	return fmt.Sprintf("przekroczony limit (%d bajtów) sumarycznego rozmiaru wysłanych wiadomości", MessageSizeLimit)
+}
 
 func writeMessage(w io.Writer, message *Message) error {
 	rr := recvResponse{
@@ -175,11 +186,11 @@ func (i *Instance) communicate(r io.Reader, w io.Writer, reqCh chan<- *request, 
 		if req.requestType == requestSend {
 			i.MessagesSent++
 			if i.MessagesSent > MessageCountLimit {
-				return ErrMessageCount
+				return ErrMessageCount{}
 			}
 			i.MessageBytesSent += len(req.message)
 			if i.MessageBytesSent > MessageSizeLimit {
-				return ErrMessageSize
+				return ErrMessageSize{}
 			}
 		}
 		currentTime := req.time
