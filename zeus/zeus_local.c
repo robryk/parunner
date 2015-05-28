@@ -114,6 +114,7 @@ static int CurrentTime() {
 #endif
 
 void ZEUS(Send)(ZEUS(NodeId) target, const char* message, int bytes) {
+	Init();
 	assert(target >= 0 && target < nof_nodes);
 	assert(bytes <= MAX_MESSAGE_SIZE);
 	int i;
@@ -127,6 +128,7 @@ void ZEUS(Send)(ZEUS(NodeId) target, const char* message, int bytes) {
 }
 
 ZEUS(MessageInfo) ZEUS(Receive)(ZEUS(NodeId) source, char* buffer, int buffer_size) {
+	Init();
 	assert(source >= -1 && source < nof_nodes);
 	ZEUS(MessageInfo) mi;
 	int i;
