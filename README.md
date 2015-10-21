@@ -18,23 +18,23 @@ There is an [example](https://github.com/robryk/parunner/blob/master/zeus/exampl
 2. Obtain a binary of parunner. If you have a Go toolchain installed, you can compile it by doing `go get github.com/robryk/parunner`. The binary will then be built and written to `$GOPATH/bin/parunner`. There is also a compiled binary for [linux-amd64](https://drone.io/github.com/robryk/parunner/files/parunner) available.
 3. Run `parunner -n=3 -trace_comm -stdout=tagged zeus/example`. The output should look like this:
 ```
-robryk@sharya-rana ~/g/s/g/r/parunner> parunner -n=3 -trace_comm -stdout=tagged zeus/example
-STDOUT 0: Nodeow jest 3, a ja mam numer 0.
-STDOUT 0: Wysylam wiadomosc do 1.
-STDOUT 1: Nodeow jest 3, a ja mam numer 1.
-STDOUT 1: Wysylam wiadomosc do 2.
-STDOUT 1: Odbieram wiadomosc od 0.
-STDOUT 2: Nodeow jest 3, a ja mam numer 2.
-STDOUT 2: Odbieram wiadomosc od 1.
-COMM: instancja  1:instancja 0 wysyła do mnie wiadomość (13 bajtów) [0]
-COMM: instancja  2:instancja 1 wysyła do mnie wiadomość (13 bajtów) [0]
-COMM: instancja  1:czekam na wiadomość od instancji 0 [0]
-COMM: instancja  1:odebrałam wiadomość od instancji 0 (13 bajtów)
-STDOUT 1: Odebralem: Hello from 0!
-COMM: instancja  2:czekam na wiadomość od instancji 1 [0]
-COMM: instancja  2:odebrałam wiadomość od instancji 1 (13 bajtów)
-STDOUT 2: Odebralem: Hello from 1!
-Czas trwania: 0 (najdłużej działająca instancja: 2)
+$ parunner -n=3 -trace_comm -stdout=tagged zeus/example
+STDOUT 0: #nodes is 3, and I have the number 0.
+STDOUT 0: sends a message to 1.
+STDOUT 1: #nodes is 3, and I have the number 1.
+STDOUT 1: Sends a message to the 2.
+STDOUT 1: I receive a message from 0.
+STDOUT 2: #nodes is 3, and I have a number 2.
+STDOUT 2: I receive a message from the 1.
+COMM: 1 instance instance of 0 sends me a message (13 bytes) [0]
+COMM instance of 2: 1 instance sends me a message (13 bytes) [0]
+COMM: 1 instance: I'm waiting for a message from an instance of 0 [0]
+COMM: 1 instance: I received a message from an instance of 0 (13 bytes)
+STDOUT 1: I picked: Hello from 0!
+COMM: 2 instance: I'm waiting for a message from instance 1 [0]
+COMM: 2 instance: I received a message from one instance (13 bytes)
+STDOUT 2: I picked: Hello from 1!
+Duration: 0 (longest running instance: 2)
 ```
 
 For more information on parunner's usage invoke it with no arguments.
